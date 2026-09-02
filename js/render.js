@@ -82,6 +82,23 @@
     const pts = [inv(0, -90), inv(W, -90), inv(0, H + 40), inv(W, H + 40)];
     return { x0: Math.floor(Math.min(...pts.map((q) => q.x))) - 1, x1: Math.ceil(Math.max(...pts.map((q) => q.x))) + 1, y0: Math.floor(Math.min(...pts.map((q) => q.y))) - 1, y1: Math.ceil(Math.max(...pts.map((q) => q.y))) + 1 };
   }
+  // soft patches of a second texture: blobs are drawn into a mask, then the pattern is kept only where the mask is
+  let patchCv = null, patchCtx = null; const patchPats = {};
+  function patchLayer(cells, key) {
+    if (!cells.length) return;
+    const cw = Math.ceil(W * DPR), chh = Math.ceil(H * DPR);
+    if (!patchCv || patchCv.width !== cw || patchCv.height !== chh) { patchCv = document.createElement('canvas'); patchCv.width = cw; patchCv.height = chh; patchCtx = patchCv.getContext('2d'); for (const k in patchPats) delete patchPats[k]; }
+    const g = patchCtx; const im = img(key); if (!im) return;
+    let pat = patchPats[key]; if (!pat) { pat = g.createPattern(im, 'repeat'); try { pat.setTransform(new DOMMatrix([6 / im.naturalWidth, 0, 0, 6 / im.naturalHeight, 0, 0])); } catch (e) { /* */ } patchPats[key] = pat; }
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, cw, chh);
+    const c = iso(cam.x, cam.y);
+    g.setTransform(DPR * TW / 2, DPR * TH / 2, -DPR * TW / 2, DPR * TH / 2, DPR * (W / 2 - c.sx), DPR * (H * 0.56 - c.sy));
+    for (const [bx, by, a] of cells) { const grd = g.createRadialGradient(bx + 0.5, by + 0.5, 0, bx + 0.5, by + 0.5, 1.4); grd.addColorStop(0, 'rgba(0,0,0,' + (a * 0.95) + ')'); grd.addColorStop(0.55, 'rgba(0,0,0,' + (a * 0.6) + ')'); grd.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = grd; g.fillRect(bx - 0.9, by - 0.9, 2.8, 2.8); }
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = pat;
+    const wb = worldBounds(); g.fillRect(wb.x0 - 2, wb.y0 - 2, wb.x1 - wb.x0 + 4, wb.y1 - wb.y0 + 4);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over';
+    ctx.drawImage(patchCv, 0, 0, cw, chh, 0, 0, W, H);
+  }
   // soft fog of war: a quarter-resolution mask upscaled with smoothing gives blurred edges for free
   let fogCv = null, fogCtx = null; const FOG_SCALE = 0.25;
   function drawFogLayer(revealed) {
@@ -517,7 +534,7 @@
       const v = tiles[i]; if (v === Wr.VOID) continue;
       revealed.rect(tx - 0.3, ty - 0.3, 1.6, 1.6);
       if (v === Wr.WATER) { waterP.rect(tx, ty, 1, 1); shoreP.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); }
-      else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); } const b = blendNoise[i] * 0.65 + blendNoise2[i] * 0.35; if (b > 0.52 && v !== Wr.PATH) blends.push([tx, ty, Math.min(1, (b - 0.52) / 0.16)]); }
+      else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.5, ty - 0.5, 2, 2); } else { const b = blendNoise[i] * 0.65 + blendNoise2[i] * 0.35; if (b > 0.6) blends.push([tx, ty, Math.min(1, (b - 0.6) / 0.14), 0]); const b2 = blendNoise2[i] * 0.7 + blendNoise[i] * 0.3; if (b2 < 0.34) blends.push([tx, ty, Math.min(1, (0.34 - b2) / 0.12), 1]); } }
       if (v === Wr.ROCK) {
         rockP.rect(tx, ty, 1, 1);
         const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const t2 = Wr.walkable(map, tx + dx, ty + dy); return t2; });
@@ -527,19 +544,21 @@
     }
     for (const c of map.clutter || []) { const i = c.y * mw + c.x; if (!Wd.explored[i] || c.x < X0 || c.x > X1 || c.y < Y0 || c.y > Y1) continue; drawables.push({ d: c.x + c.y + 1.05, f: () => { const p = toScreen(c.x + 0.5, c.y + 0.5); drawSpriteImg(theme.clutter[c.k % theme.clutter.length], { x: p.x, y: p.y + 6 }, 44 + c.k * 8); } }); }
     isoTransform();
-    const gp = pattern(theme.ground, 5), pp = pattern(theme.path, 4), wp = pattern('tile_water', 4, (torchPhase * 0.12) % 4);
-    ctx.fillStyle = gp || theme.tint; ctx.fill(groundP);
-    // second ground layer with soft, noise-driven transitions (each cell slightly oversized so neighbours overlap)
-    const ap = pattern(theme.alt, 5);
-    if (ap) { ctx.fillStyle = ap; for (const [bx, by, a] of blends) { ctx.globalAlpha = a * 0.92; ctx.fillRect(bx - 0.35, by - 0.35, 1.7, 1.7); } ctx.globalAlpha = 1; }
+    // calm base grass at two scales (the second breaks the repeat), then rare detailed patches with soft edges
+    const bp = pattern(theme.base, 9), bp2 = pattern(theme.base, 17), pp = pattern(theme.path, 4), wp = pattern('tile_water', 4, (torchPhase * 0.12) % 4);
+    ctx.fillStyle = bp || pattern(theme.ground, 9) || theme.tint; ctx.fill(groundP);
+    if (bp2) { ctx.globalAlpha = 0.45; ctx.fillStyle = bp2; ctx.fill(groundP); ctx.globalAlpha = 1; }
+    resetTransform();
+    patchLayer(blends.filter((b) => !b[3]), theme.ground); patchLayer(blends.filter((b) => b[3]), theme.alt);
+    isoTransform();
     const rp = pattern('tile_rock', 4); ctx.fillStyle = rp || '#2a2622'; ctx.fill(rockP); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(rockP);
-    if (pp) { ctx.globalAlpha = 0.45; ctx.fillStyle = pp; ctx.fill(pathSoft); ctx.globalAlpha = 0.95; ctx.fill(pathP); ctx.globalAlpha = 1; }
+    if (pp) { ctx.globalAlpha = 0.35; ctx.fillStyle = pp; ctx.fill(pathSoft); ctx.globalAlpha = 0.95; ctx.fill(pathP); ctx.globalAlpha = 1; }
     ctx.globalAlpha = 0.4; ctx.fillStyle = '#05090b'; ctx.fill(shoreP); ctx.globalAlpha = 1;
     ctx.fillStyle = '#0a1418'; ctx.fill(waterP);
     if (wp) { ctx.globalAlpha = 0.8; ctx.fillStyle = wp; ctx.fill(waterP); ctx.globalAlpha = 1; }
     resetTransform();
     // unify colours: theme tint plus large soft blotches of shade, like painted ground
-    ctx.fillStyle = theme.tint; ctx.globalAlpha = 0.22; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    ctx.fillStyle = theme.tint; ctx.globalAlpha = 0.3; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
     for (let k = 0; k < 9; k++) {
       const bx = ((Wd.seed >>> (k * 3)) % 41 + k * 5) % mw, by = ((Wd.seed >>> (k * 2 + 1)) % 37 + k * 7) % mh; const p = toScreen(bx, by);
       if (p.x < -220 || p.x > W + 220 || p.y < -220 || p.y > H + 220) continue;
@@ -659,7 +678,7 @@
   function preloadAll() {
     const keys = ['bg_village', 'tile_door', 'tile_water', 'tile_rock', 'prop_chest', 'prop_shrine', 'prop_lair', 'prop_exit', 'prop_town', 'prop_rock'];
     for (const c in D.CLASSES) { keys.push('sp_' + c); keys.push(D.CLASSES[c].img); }
-    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); keys.push(t.alt); keys.push(t.bigTree); keys.push(t.cave); for (const c of t.clutter) keys.push(c); }
+    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); keys.push(t.alt); keys.push(t.base); keys.push(t.bigTree); keys.push(t.cave); for (const c of t.clutter) keys.push(c); }
     for (const b of D.BIOMES) { keys.push('tile_' + b.id + '_floor'); keys.push('tile_' + b.id + '_wall'); keys.push(b.bg); }
     for (const s of D.SLOTS) keys.push(D.SLOT_ICON[s]);
     preload(keys);

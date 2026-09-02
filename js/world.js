@@ -10,13 +10,13 @@
   const BLOCKED = (v) => v === WATER || v === ROCK || v === TREE || v === VOID;
 
   D.ZONE_THEMES = [
-    { id: 'moors', name: 'Blighted Moors', ground: 'tile_moors_ground', alt: 'tile_moors_alt', path: 'tile_moors_path', tree: 'prop_tree_dead', bigTree: 'prop_bigtree_moors', cave: 'prop_cave_moors', clutter: ['prop_clutter_graves', 'prop_clutter_bush'], tint: '#1c2118', fog: 'rgba(10,14,8,0.6)', accent: '#b8a860',
+    { id: 'moors', name: 'Blighted Moors', base: 'tile_moors_base', ground: 'tile_moors_ground', alt: 'tile_moors_alt', path: 'tile_moors_path', tree: 'prop_tree_dead', bigTree: 'prop_bigtree_moors', cave: 'prop_cave_moors', clutter: ['prop_clutter_graves', 'prop_clutter_bush'], tint: '#1c2118', fog: 'rgba(10,14,8,0.6)', accent: '#b8a860',
       enemies: ['skeleton', 'ghoul', 'grave_bat', 'plague_rat', 'sewer_rat_swarm', 'plague_cultist', 'drowned'], boss: 'bone_lord', dungeon: 'Catacombs', flavor: 'Dead heather, old graves, and something that keeps digging them up.' },
-    { id: 'fens', name: 'Fungal Fens', ground: 'tile_fens_ground', alt: 'tile_fens_alt', path: 'tile_fens_path', tree: 'prop_tree_swamp', bigTree: 'prop_bigtree_fens', cave: 'prop_cave_fens', clutter: ['prop_clutter_mushrooms', 'prop_clutter_boat'], tint: '#141f1c', fog: 'rgba(6,18,14,0.6)', accent: '#6fd6c0',
+    { id: 'fens', name: 'Fungal Fens', base: 'tile_fens_base', ground: 'tile_fens_ground', alt: 'tile_fens_alt', path: 'tile_fens_path', tree: 'prop_tree_swamp', bigTree: 'prop_bigtree_fens', cave: 'prop_cave_fens', clutter: ['prop_clutter_mushrooms', 'prop_clutter_boat'], tint: '#141f1c', fog: 'rgba(6,18,14,0.6)', accent: '#6fd6c0',
       enemies: ['slime', 'drowned', 'spore_crawler', 'cave_spider', 'myconid', 'blind_troll', 'plague_cultist'], boss: 'mother_spore', dungeon: 'Sunken Warren', flavor: 'The water is warm. Nothing here is alive in the usual way.' },
-    { id: 'tundra', name: 'Frozen Reach', ground: 'tile_tundra_ground', alt: 'tile_tundra_alt', path: 'tile_tundra_path', tree: 'prop_tree_pine', bigTree: 'prop_bigtree_tundra', cave: 'prop_cave_tundra', clutter: ['prop_clutter_ice', 'prop_clutter_frozen'], tint: '#1a2028', fog: 'rgba(8,12,20,0.6)', accent: '#9fc9ff',
+    { id: 'tundra', name: 'Frozen Reach', base: 'tile_tundra_base', ground: 'tile_tundra_ground', alt: 'tile_tundra_alt', path: 'tile_tundra_path', tree: 'prop_tree_pine', bigTree: 'prop_bigtree_tundra', cave: 'prop_cave_tundra', clutter: ['prop_clutter_ice', 'prop_clutter_frozen'], tint: '#1a2028', fog: 'rgba(8,12,20,0.6)', accent: '#9fc9ff',
       enemies: ['frost_wight', 'ice_golem', 'frozen_dwarf', 'wendigo', 'grave_bat', 'skeleton'], boss: 'frost_king', dungeon: 'Frost Halls', flavor: 'The snow does not melt. The dead do not rot.' },
-    { id: 'ash', name: 'Ashen Wastes', ground: 'tile_ash_ground', alt: 'tile_ash_alt', path: 'tile_ash_path', tree: 'prop_tree_ash', bigTree: 'prop_bigtree_ash', cave: 'prop_cave_ash', clutter: ['prop_clutter_bones', 'prop_clutter_wagon'], tint: '#221410', fog: 'rgba(24,8,4,0.6)', accent: '#ff7a3a',
+    { id: 'ash', name: 'Ashen Wastes', base: 'tile_ash_base', ground: 'tile_ash_ground', alt: 'tile_ash_alt', path: 'tile_ash_path', tree: 'prop_tree_ash', bigTree: 'prop_bigtree_ash', cave: 'prop_cave_ash', clutter: ['prop_clutter_bones', 'prop_clutter_wagon'], tint: '#221410', fog: 'rgba(24,8,4,0.6)', accent: '#ff7a3a',
       enemies: ['imp', 'forge_golem', 'hellhound', 'chained_devil', 'void_spawn', 'watcher', 'faceless'], boss: 'forge_master', dungeon: 'Infernal Pit', flavor: 'Ash falls upward here. The sky is the wrong colour.' },
   ];
   const ADJ = ['Rotting', 'Howling', 'Blackened', 'Weeping', 'Hollow', 'Sunken', 'Bleak', 'Broken', 'Silent', 'Withered'];
@@ -119,7 +119,7 @@
     for (let i = 0; i < packs; i++) { const c = place('pack', 12, maxD, 11); if (c) { c.size = ri(2, zone === 1 ? 3 : 4); c.members = []; for (let k = 0; k < c.size; k++) c.members.push({ eid: theme.enemies[ri(0, theme.enemies.length - 1)], ox: rnd(), oy: rnd() }); } }
     for (let i = 0; i < 3; i++) place('shrine', 10, maxD, 14);
     for (let i = 0; i < 6; i++) place('chest', 8, maxD, 9);
-    for (const po of map.pois) { if (po.type !== 'exit' && po.type !== 'dungeon' && po.type !== 'lair') continue; const path = pathFromPar(map, r.par, po.y * w + po.x); for (const t of path) if (tiles[t.y * w + t.x] === GROUND) tiles[t.y * w + t.x] = PATH; }
+    for (const po of map.pois) { if (po.type !== 'exit' && po.type !== 'dungeon' && po.type !== 'lair') continue; const path = pathFromPar(map, r.par, po.y * w + po.x); for (const t of path) { for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const x = t.x + dx, y = t.y + dy; if (inGrid(x, y) && (tiles[y * w + x] === GROUND || tiles[y * w + x] === TREE)) tiles[y * w + x] = PATH; } } }
     map.name = `${theme.name}`; map.title = zone === 1 ? theme.name : `${theme.name} ${['', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'][Math.floor((zone - 1) / D.ZONE_THEMES.length)] || ''}`.trim();
     map.rocks = []; for (let i = 0; i < 30; i++) { const x = ri(3, w - 4), y = ri(3, h - 4); if (tiles[y * w + x] === GROUND && !used.some((u) => Math.abs(u.x - x) + Math.abs(u.y - y) < 3)) { tiles[y * w + x] = ROCK; map.rocks.push({ x, y }); } }
     r = bfs(map, start.x, start.y, (x, y) => walkable(map, x, y));
