@@ -7,7 +7,7 @@ const store = {};
 const ctx = { window: null, console, localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: (k) => { delete store[k]; } }, btoa: (s) => Buffer.from(s, 'binary').toString('base64'), atob: (s) => Buffer.from(s, 'base64').toString('binary'), Date, Math, JSON };
 ctx.window = ctx;
 vm.createContext(ctx);
-for (const f of ['data.js', 'game.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
+for (const f of ['data.js', 'dungeon.js', 'game.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 const G = ctx.Game;
 const args = process.argv.slice(2);
 const hours = parseFloat(args[0] || '2');   // simulated play hours

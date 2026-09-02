@@ -3,14 +3,7 @@
   'use strict';
   const D = window.DATA, G = window.Game, UI = window.UI, R = window.Render;
 
-  // preload art
-  const keys = [];
-  for (const c in D.CLASSES) keys.push(D.CLASSES[c].img);
-  for (const b of D.BIOMES) keys.push(b.bg);
-  keys.push('bg_village');
-  for (const s of D.SLOTS) keys.push(D.SLOT_ICON[s]);
-  R.preload(keys);
-  setTimeout(() => R.preload(Object.values(D.ENEMIES).map((e) => e.img)), 1500);
+  R.preloadAll();
 
   R.start();
   R.bind();

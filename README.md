@@ -6,7 +6,7 @@ No build step. Open `index.html` from any static host (GitHub Pages works) — e
 
 ## Features
 
-- **Auto-crawling party** rendered on a canvas with painterly dungeon backdrops; touch-only UI, no direct character control.
+- **Auto-crawling party** in an isometric, procedurally generated dungeon: doored rooms joined by corridors, Diablo-style. The company walks the corridors in formation, doors swing open to reveal what waits inside, and attacks, projectiles and spells are drawn on the canvas. Touch-only UI, no direct character control.
 - **Extract-or-descend loop**: floors of rooms, bosses every 5 floors, waystones every 10 floors so you can start deeper.
 - **Six dungeon styles** that switch every 10 floors: Catacombs, Drowned Sewers, Fungal Deep, Frozen Halls, Infernal Forge, Abyss — then Nightmare cycles beyond floor 60.
 - **8 hero classes** (5 starters, 3 unlocked by milestones), each with a trait and 5 skills learned by level.
@@ -17,7 +17,7 @@ No build step. Open `index.html` from any static host (GitHub Pages works) — e
 
 ## Art
 
-All portraits and backdrops were generated with OpenArt (Nano Banana 2) in a gritty, painterly dark-fantasy style and converted to WebP with `tools/process_images.py`.
+All portraits, backdrops, sprites and tiles were generated with OpenArt (Nano Banana 2) in a gritty, painterly dark-fantasy style. `tools/process_images.py` converts portraits and backdrops to WebP; `tools/cutout.py` chroma-keys the green/magenta-screen sprites into transparent WebP and resizes the floor, wall and door tiles. Sprites are static; walking, lunges, projectiles and spell effects are done in `js/render.js`.
 
 ## Balance simulation
 

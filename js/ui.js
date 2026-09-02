@@ -63,7 +63,7 @@
     const label = $('#scene-label');
     if (R) {
       const bf = G.biomeFor(R.floor); const rooms = D.ROOMS_PER_FLOOR + (G.isBossFloor(R.floor) ? 1 : 0);
-      label.innerHTML = `<span>Floor <b>${R.floor}</b> · <span class="biome">${esc(bf.biome.name)}${bf.cycle ? ' ' + 'I'.repeat(bf.cycle + 1) : ''}</span></span><span>${R.phase === 'floorclear' ? 'Exit' : (G.isBossFloor(R.floor) && R.room === rooms ? 'BOSS' : 'Room ' + Math.min(R.room, rooms) + '/' + rooms)}</span>`;
+      label.innerHTML = `<span>Floor <b>${R.floor}</b> · <span class="biome">${esc(bf.biome.name)}${bf.cycle ? ' ' + 'I'.repeat(bf.cycle + 1) : ''}</span></span><span>${R.phase === 'floorclear' ? 'Exit' : (G.isBossFloor(R.floor) && R.room === rooms ? 'BOSS' : 'Room ' + Math.min(R.phase === 'travel' ? R.room + 1 : R.room, rooms) + '/' + rooms)}</span>`;
     } else label.innerHTML = `<span><span class="biome">Village gate</span></span><span>Deepest: ${S.maxFloor}</span>`;
 
     let html = '';

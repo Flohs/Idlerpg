@@ -354,26 +354,45 @@
     startFloor += (S.perks.legacy_depth || 0) * D.ASCENSION_PERKS.find((p) => p.id === 'legacy_depth').val;
     const party = S.party.map((uid) => { const h = S.heroes.find((x) => x.uid === uid); const st = heroStats(h); return { uid, hp: st.hp, maxhp: st.hp, shield: 0, ap: Math.random() * 50, cds: {}, buffs: [], alive: true, taunt: 0, stun: 0, dots: [] }; });
     S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0 };
+    newFloorMap();
     S.stats.runs++;
     log(`The company descends. Floor ${startFloor}: ${biomeFor(startFloor).biome.name}.`, 'run');
     emit('runstart'); return null;
   }
-  function spawnEncounter() {
+  const TICKS_PER_TILE = 3;
+  function roomsTotal(f) { return D.ROOMS_PER_FLOOR + (isBossFloor(f) ? 1 : 0); }
+  function newFloorMap() {
+    const R = S.run;
+    R.seed = Math.floor(Math.random() * 1e9);
+    R.map = window.Dungeon.generate(R.floor, roomsTotal(R.floor), R.seed);
+    R.doorOpen = false; R.travelT = 0;
+    R.next = makeEncounter(1);
+  }
+  // Build the monsters waiting in room `roomIdx` (1-based; the last room of a boss floor holds the boss).
+  function makeEncounter(roomIdx) {
     const R = S.run; const f = R.floor; const { biome, cycle } = biomeFor(f);
-    const boss = isBossFloor(f) && R.room === D.ROOMS_PER_FLOOR; // boss in final room
+    const boss = isBossFloor(f) && roomIdx === roomsTotal(f);
     const count = boss ? 1 + (f >= 20 ? 1 : 0) : clamp(1 + Math.floor(Math.random() * (2 + Math.min(2, Math.floor(f / 8)))), 1, 4);
     const hpB = C.enemyHP(f) * difficultyMult() * (1 + cycle * 0.5), atkB = C.enemyATK(f) * difficultyMult() * (1 + cycle * 0.3), defB = C.enemyDEF(f);
-    R.enemies = [];
+    const list = [];
     const mk = (eid, isBoss) => {
       const e = D.ENEMIES[eid];
       const hp = Math.floor(hpB * e.hp * (0.9 + Math.random() * 0.2));
       return { id: 'e' + (S.uid++), eid, name: e.name + (cycle > 0 ? ' ' + 'I'.repeat(cycle + 1).replace('IIII', 'IV') : ''), img: e.img, hp, maxhp: hp, atk: atkB * e.atk, def: defB * e.def, spd: 8 * e.spd, ap: Math.random() * 40, alive: true, boss: !!isBoss, buffs: [], dots: [], stun: 0, shield: 0, spec: e, shake: 0 };
     };
-    if (boss) { R.enemies.push(mk(biome.boss, true)); if (count > 1) R.enemies.push(mk(pick(biome.enemies), false)); }
-    else for (let i = 0; i < count; i++) R.enemies.push(mk(pick(biome.enemies), false));
-    R.phase = 'combat'; R.roundT = 0;
-    emit('encounter', { boss, enemies: R.enemies });
+    if (boss) { list.push(mk(biome.boss, true)); if (count > 1) list.push(mk(pick(biome.enemies), false)); }
+    else for (let i = 0; i < count; i++) list.push(mk(pick(biome.enemies), false));
+    return list;
   }
+  function spawnEncounter() {
+    const R = S.run;
+    R.enemies = R.next || makeEncounter(R.room); R.next = null;
+    for (const e of R.enemies) e.spec = D.ENEMIES[e.eid];
+    R.phase = 'combat'; R.roundT = 0;
+    emit('encounter', { boss: R.enemies.some((e) => e.boss), enemies: R.enemies });
+  }
+  function currentSeg() { const R = S.run; return R.map && R.map.segs[R.room] ? R.map.segs[R.room] : null; } // segment leading to room R.room+1
+  function travelNeed() { const seg = currentSeg(); return seg ? seg.path.length * TICKS_PER_TILE : 25; }
 
   // combatant helpers
   function effStat(c, stat) {
@@ -508,6 +527,7 @@
   function descend() {
     const R = S.run; if (!R || R.phase !== 'floorclear') return 'Not at a floor exit.';
     R.floor++; R.room = 0; R.phase = 'travel'; R.travelT = 0;
+    newFloorMap();
     const { biome } = biomeFor(R.floor);
     if ((R.floor - 1) % D.FLOORS_PER_BIOME === 0) log(`Floor ${R.floor}: ${biome.name}. ${biome.flavor}`, 'run');
     emit('floor', { floor: R.floor });
@@ -652,8 +672,10 @@
     }
     R.tick++; S.stats.playTicks++;
     if (R.phase === 'travel') {
+      if (!R.map) newFloorMap();
       R.travelT++;
-      const need = R.room === 0 ? 18 : 25;
+      const seg = currentSeg(); const need = travelNeed();
+      if (!R.doorOpen && seg && R.travelT >= (seg.doorIdx - 1) * TICKS_PER_TILE) { R.doorOpen = true; emit('door', { room: R.room + 1, boss: (R.next || []).some((e) => e.boss) }); }
       if (R.travelT >= need) { R.room++; R.travelT = 0; spawnEncounter(); }
       return;
     }
@@ -668,9 +690,8 @@
       }
       if (!S.run) return;
       if (!R.enemies.some((e) => e.alive)) {
-        const roomsTotal = D.ROOMS_PER_FLOOR + (isBossFloor(R.floor) ? 1 : 0);
-        if (R.room >= roomsTotal) floorCleared();
-        else { R.phase = 'travel'; R.travelT = 0; for (const p of R.party) if (p.alive) heal(p, p.maxhp * 0.03, true); emit('roomclear'); }
+        if (R.room >= roomsTotal(R.floor)) floorCleared();
+        else { R.phase = 'travel'; R.travelT = 0; R.doorOpen = false; R.next = makeEncounter(R.room + 1); for (const p of R.party) if (p.alive) heal(p, p.maxhp * 0.03, true); emit('roomclear'); }
       }
       return;
     }
@@ -729,7 +750,11 @@
     for (const k in def.settings) if (S.settings[k] === undefined) S.settings[k] = def.settings[k];
     for (const k in def.mats) if (S.mats[k] === undefined) S.mats[k] = 0;
     for (const k in def.buildings) if (S.buildings[k] === undefined) S.buildings[k] = 0;
-    if (S.run) { for (const e of S.run.enemies) e.spec = D.ENEMIES[e.eid]; }
+    if (S.run) {
+      for (const e of S.run.enemies) e.spec = D.ENEMIES[e.eid];
+      for (const e of S.run.next || []) e.spec = D.ENEMIES[e.eid];
+      if (!S.run.map) { const R = S.run; R.seed = Math.floor(Math.random() * 1e9); R.map = window.Dungeon.generate(R.floor, roomsTotal(R.floor), R.seed); R.doorOpen = R.phase !== 'travel'; R.travelT = 0; if (R.phase === 'travel') R.next = R.next || makeEncounter(R.room + 1); }
+    }
     return true;
   }
   function offlineProgress() {
@@ -765,7 +790,7 @@
     sellItem, salvageItem, equipItem, unequip, autoEquip, autoEquipAll, canEquip, findItem, itemScore,
     craft, craftCost, craftIlvl, upgrade, upgradeCost, upgradeCap, enchant, enchantCost,
     buildingCost, buildingAvailable, upgradeBuilding, collectMine, guildLevel,
-    startRun, extract, descend, abandonRun, waystones, biomeFor, isBossFloor, difficultyMult,
+    startRun, extract, descend, abandonRun, waystones, biomeFor, isBossFloor, difficultyMult, roomsTotal, travelNeed, currentSeg, TICKS_PER_TILE,
     canAscend, ascensionReward, ascend, buyPerk, checkMilestones, xpToNext: C.xpToNext,
   };
 })();
