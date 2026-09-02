@@ -157,7 +157,7 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .compare .pos { color: var(--green); } .compare .neg { color: var(--blood2); }
 
 /* Toasts */
-#toasts { position: absolute; top: 56px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 60; }
+#toasts { position: absolute; bottom: calc(72px + var(--safe-b)); left: 0; right: 0; display: flex; flex-direction: column-reverse; align-items: center; gap: 6px; pointer-events: none; z-index: 60; }
 .toast { background: rgba(20,17,12,0.95); border: 1px solid var(--gold); color: #f0e2c0; padding: 8px 14px; border-radius: 8px; font-size: 13px; max-width: 90%; box-shadow: 0 4px 20px #000; animation: toast 0.25s ease-out; font-family: var(--serif); }
 .toast.milestone { border-color: var(--gold2); background: linear-gradient(#3a2a10, #1a1208); text-align: center; }
 .toast.milestone b { display: block; font-size: 15px; color: var(--gold2); letter-spacing: 1px; }
