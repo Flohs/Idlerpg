@@ -90,7 +90,7 @@
     const n1 = noise2(rnd, w, h, 12), n2 = noise2(rnd, w, h, 6), n3 = noise2(rnd, w, h, 4);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = y * w + x; if (tiles[i] !== GROUND) continue; const v = n1[i] * 0.7 + n2[i] * 0.3;
-      if (v < 0.24) tiles[i] = WATER; else if (v > 0.8) tiles[i] = ROCK; else if (n3[i] > 0.7 && n2[i] > 0.42) tiles[i] = TREE;
+      if (v < 0.24) tiles[i] = WATER; else if (v > 0.8) tiles[i] = ROCK; else if (n3[i] > 0.6 && rnd() < 0.5) { let ok = true; for (let dy = -2; dy <= 2 && ok; dy++) for (let dx = -2; dx <= 2; dx++) { if (!dx && !dy) continue; if (inGrid(x + dx, y + dy) && tiles[(y + dy) * w + x + dx] === TREE) { ok = false; break; } } if (ok) tiles[i] = TREE; }
     }
     // cliffs: void next to land becomes rock
     for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (tiles[i] !== VOID) continue; let near = false; for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) if (tiles[(y + dy) * w + x + dx] !== VOID && tiles[(y + dy) * w + x + dx] !== ROCK) { near = true; break; } if (near) tiles[i] = ROCK; }
@@ -133,7 +133,7 @@
       if (used.some((u) => Math.abs(u.x - x) + Math.abs(u.y - y) < 3)) continue;
       map.clutter.push({ x, y, k: ri(0, 1) });
     }
-    map.bigTrees = {}; for (let i = 0; i < w * h; i++) if (tiles[i] === TREE && rnd() < 0.45) map.bigTrees[i] = 1;
+    map.bigTrees = {}; for (let i = 0; i < w * h; i++) if (tiles[i] === TREE && rnd() < 0.6) map.bigTrees[i] = 1;
     return map;
   }
   function zoneLevel(zone) { return 1 + (zone - 1) * 10; }

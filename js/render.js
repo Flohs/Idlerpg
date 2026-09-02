@@ -24,6 +24,7 @@
   const ents = {};
   const fx = [];
   const floats = [];
+  const drops = {}; // ground loot by drop id -> { x, y, drop, t }
   const tileCache = {};
   const doorAnim = {};
   let banner = null, shakeT = 0, lastT = 0, torchPhase = 0, lastFloorKey = '', lastZoneKey = '';
@@ -344,6 +345,36 @@
     }
     return false;
   }
+  // walk the first living hero to the next drop; the rest wait where they stand
+  function lootWalk(B, p, i, re, dt, speed, blocked) {
+    const leadUid = (B.party.find((x) => x.alive) || B.party[0] || {}).uid;
+    if (p.uid !== leadUid) { re.moving = false; return; }
+    const d = B.drops && B.drops[0] && drops[B.drops[0].id];
+    if (!d) { re.moving = false; return; }
+    re.moving = steer(re, d.x, d.y, dt, 4.5 * speed, blocked);
+  }
+  function pushDrops(drawables) {
+    for (const id in drops) { const d = drops[id]; drawables.push({ d: d.x + d.y + 0.6, f: () => drawDrop(d) }); }
+  }
+  function drawDrop(d) {
+    const p = toScreen(d.x, d.y); const it = d.drop.item; const t = torchPhase * 3 + d.x;
+    const glow = 0.5 + Math.sin(t) * 0.2;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+    if (it) {
+      const col = D.RARITIES[it.rarity].color;
+      ctx.save(); ctx.translate(p.x, p.y - 6); ctx.rotate(Math.PI / 4);
+      ctx.shadowColor = col; ctx.shadowBlur = 10 * glow; ctx.fillStyle = col; ctx.fillRect(-5, -5, 10, 10);
+      ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(-3, -3, 6, 6); ctx.restore();
+      if (it.rarity >= 1) nameTag(p.x, p.y - 18, it.name, col);
+    } else if (d.drop.gold) {
+      ctx.fillStyle = '#d9a63a';
+      for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(p.x - 5 + k * 3.3, p.y - 2 - (k % 2) * 2, 3.2, 1.8, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = 'rgba(255,240,180,' + (0.35 + glow * 0.4) + ')'; ctx.beginPath(); ctx.ellipse(p.x - 1, p.y - 4, 1.6, 0.9, 0, 0, Math.PI * 2); ctx.fill();
+    } else if (d.drop.mat) {
+      const m = D.MATERIALS[d.drop.mat.id]; ctx.fillStyle = (m && m.color) || '#9a9a9a';
+      ctx.beginPath(); ctx.moveTo(p.x - 6, p.y); ctx.lineTo(p.x - 2, p.y - 8); ctx.lineTo(p.x + 5, p.y - 6); ctx.lineTo(p.x + 6, p.y); ctx.closePath(); ctx.fill();
+    }
+  }
   function addFloat(id, text, kind) {
     const p = entPos(id); if (!p) return;
     const colors = { dmg: '#f0e6d2', hurt: '#ff6a5a', crit: '#ffd24a', heal: '#7fe07a', gold: '#f2c14e', miss: '#9a9a9a', shield: '#9cc4ff', status: '#c9b7ff', dot: '#b7e37a', loot: '#d9a0ff' };
@@ -389,7 +420,7 @@
   function drawDungeon(S, R, dt, speed) {
     const G = window.Game; const map = R.map; const bf = G.biomeFor(R.floor); const biome = bf.biome;
     const floorKey = 'd' + R.floor + ':' + R.seed;
-    if (floorKey !== lastFloorKey) { lastFloorKey = floorKey; lastZoneKey = ''; for (const k in doorAnim) delete doorAnim[k]; for (const k in ents) delete ents[k]; fx.length = 0; cam.init = false; }
+    if (floorKey !== lastFloorKey) { lastFloorKey = floorKey; lastZoneKey = ''; for (const k in doorAnim) delete doorAnim[k]; for (const k in ents) delete ents[k]; for (const k in drops) delete drops[k]; fx.length = 0; cam.init = false; }
     const rooms = map.rooms; const seg = map.segs[R.room + 1]; const inTravel = R.phase === 'travel' && seg;
     const need = G.travelNeed(); const prog = inTravel ? (R.travelT / need) * seg.path.length : 0;
     const room = rooms[map.route[R.room].room];
@@ -402,6 +433,7 @@
       re.alive = p.alive;
       if (inTravel) {
         const my = prog - i * 1.0; if (my > 0) { const t = pathPos(seg, my); re.moving = steer(re, t.x, t.y, dt, 6 * speed, null); }
+      } else if (R.phase === 'loot') { lootWalk(R, p, i, re, dt, speed, blocked);
       } else if (R.phase !== 'combat') { // gather loosely near the room's centre-left
         const gx = room.x + room.w * 0.35 + (i % 2) * 0.9, gy = room.cy + 0.5 + (Math.floor(i / 2) - 1) * 1.0;
         re.moving = steer(re, gx, gy, dt, 3 * speed, blocked); if (!re.moving) re.face = 1;
@@ -409,8 +441,9 @@
     });
     // ---- enemies: in combat, or waiting behind the next door ----
     const nextStop = map.route[R.room + 1];
-    const list = R.phase === 'combat' ? R.enemies : (inTravel && nextStop && nextStop.enc ? (R.next || []) : []);
-    const enemyRoom = R.phase === 'combat' ? room : (nextStop ? rooms[nextStop.room] : null);
+    const fighting = R.phase === 'combat' || R.phase === 'loot';
+    const list = fighting ? R.enemies : (inTravel && nextStop && nextStop.enc ? (R.next || []) : []);
+    const enemyRoom = fighting ? room : (nextStop ? rooms[nextStop.room] : null);
     if (enemyRoom) list.forEach((e) => {
       const re = ent(e.id, 0, 0, 'enemy'); re.eid = e.eid; re.img = e.img; re.boss = e.boss;
       if (!re.init) { re.x = enemyRoom.x + enemyRoom.w * 0.45 + e.ox * (enemyRoom.w * 0.5 - 1); re.y = enemyRoom.y + 0.5 + e.oy * (enemyRoom.h - 1); if (e.boss) { re.x = enemyRoom.x + enemyRoom.w * 0.7; re.y = enemyRoom.cy + 0.5; } re.init = true; }
@@ -455,7 +488,8 @@
     for (const t of map.torches) { const o = map.owner[(t.y + 1) * mw + t.x]; if (!visibleOwner(o)) continue; const p = toScreen(t.x, t.y); if (!inView(p, 40)) continue; drawables.push({ d: t.x + t.y + 1.01, f: () => drawTorch(p) }); }
     isoTransform(); const fp = pattern('tile_' + biome.id + '_floor', 3); ctx.fillStyle = fp || biome.tint; ctx.fill(floorP); ctx.fillStyle = 'rgba(0,0,0,0.84)'; ctx.fill(hiddenP); resetTransform();
     if (R.phase === 'floorclear') { const r = rooms[rooms.length - 1]; const p = toScreen(r.cx, r.cy); drawables.push({ d: r.cx + r.cy + 1, f: () => { drawSpriteImg('prop_chest', { x: p.x, y: p.y + TH / 2 + 4 }, 26) || (() => { ctx.fillStyle = '#4a3418'; ctx.fillRect(p.x - 10, p.y - 8, 20, 12); })(); } }); }
-    pushEntities(S, R, list, drawables, R.phase === 'combat' || R.doorOpen);
+    pushDrops(drawables);
+    pushEntities(S, R, list, drawables, fighting || R.doorOpen);
     drawables.sort((a, b) => a.d - b.d);
     for (const d of drawables) d.f();
     for (let i = fx.length - 1; i >= 0; i--) { if (!drawFx(fx[i], dt)) fx.splice(i, 1); }
@@ -497,12 +531,13 @@
       const re = ent(p.uid, lead.x, lead.y, 'hero'); re.cls = h.cls; re.alive = p.alive;
       if (!re.init) { re.x = lead.x - i * 0.7; re.y = lead.y + i * 0.4; re.init = true; }
       if (Wd.phase === 'combat') return;
+      if (Wd.phase === 'loot' && Wd.enc) { lootWalk(Wd.enc, p, i, re, dt, speed, blocked); return; }
       if (i === 0 && Math.hypot(lead.x - re.x, lead.y - re.y) > 6) { re.x = lead.x; re.y = lead.y; cam.init = false; trail.length = 0; }
       if (i === 0) { re.moving = steer(re, lead.x, lead.y, dt, 5 * speed, null); if (re.moving && (trail.length === 0 || Math.hypot(trail[0].x - re.x, trail[0].y - re.y) > 0.25)) { trail.unshift({ x: re.x, y: re.y }); if (trail.length > 40) trail.pop(); } }
       else { const t = trail[Math.min(trail.length - 1, i * 4)] || { x: lead.x - i * 0.7, y: lead.y + i * 0.4 }; re.moving = steer(re, t.x, t.y, dt, 5 * speed, null); }
     });
     // ---- enemies of the current encounter ----
-    const E = Wd.phase === 'combat' ? Wd.enc : null;
+    const E = (Wd.phase === 'combat' || Wd.phase === 'loot') ? Wd.enc : null;
     const poi = E ? map.pois.find((p) => p.id === E.poi) : null;
     if (E) {
       E.enemies.forEach((e) => {
@@ -510,7 +545,7 @@
         if (!re.init) { const cx = poi ? poi.x + 0.5 : lead.x + 3, cy = poi ? poi.y + 0.5 : lead.y; re.x = cx + (e.ox - 0.5) * 4; re.y = cy + (e.oy - 0.5) * 4; if (blocked(re.x, re.y)) { re.x = cx; re.y = cy; } re.init = true; }
         re.alive = e.alive; if (!e.alive) re.deadT += dt; re.bob += dt * 2;
       });
-      combatMove(E, dt, speed, blocked, null);
+      if (Wd.phase === 'combat') combatMove(E, dt, speed, blocked, null);
     }
     updateLunges(dt);
     // ---- camera ----
@@ -540,7 +575,7 @@
         const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const t2 = Wr.walkable(map, tx + dx, ty + dy); return t2; });
         if (edge && (tx * 7 + ty * 11) % 5 !== 0) drawables.push({ d: tx + ty + 1, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); if (!drawSpriteImg('prop_rock', { x: p.x, y: p.y + 6 }, 26 + ((tx * 3 + ty * 5) % 3) * 8)) { ctx.fillStyle = '#2a2622'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); } } });
       }
-      else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); const big = map.bigTrees && map.bigTrees[i]; if (!drawSpriteImg(big ? theme.bigTree : theme.tree, { x: p.x, y: p.y + 4 }, big ? 128 + ((tx * 5 + ty * 3) % 3) * 14 : 78 + ((tx * 7 + ty * 3) % 3) * 10)) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + 4); ctx.closePath(); ctx.fill(); } } });
+      else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); const big = map.bigTrees && map.bigTrees[i]; if (!drawSpriteImg(big ? theme.bigTree : theme.tree, { x: p.x, y: p.y + 4 }, big ? 176 + ((tx * 5 + ty * 3) % 3) * 16 : 112 + ((tx * 7 + ty * 3) % 3) * 12)) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + 4); ctx.closePath(); ctx.fill(); } } });
     }
     for (const c of map.clutter || []) { const i = c.y * mw + c.x; if (!Wd.explored[i] || c.x < X0 || c.x > X1 || c.y < Y0 || c.y > Y1) continue; drawables.push({ d: c.x + c.y + 1.05, f: () => { const p = toScreen(c.x + 0.5, c.y + 0.5); drawSpriteImg(theme.clutter[c.k % theme.clutter.length], { x: p.x, y: p.y + 6 }, 44 + c.k * 8); } }); }
     isoTransform();
@@ -582,6 +617,7 @@
       po.members.forEach((mbr, k) => { const mx = po.x + 0.5 + (mbr.ox - 0.5) * 4, my = po.y + 0.5 + (mbr.oy - 0.5) * 4; const spec = D.ENEMIES[mbr.eid]; const sz = mbr.boss ? 1 : Math.max(0.7, Math.min(1.3, 0.72 + (spec ? spec.hp : 1) * 0.22)); drawables.push({ d: mx + my, f: () => { const idle = { x: mx, y: my, ldx: 0, ldy: 0, face: -1, flash: 0, bob: torchPhase * 1.5 + k }; drawSprite(idle, spec.img.replace('en_', 'sp_'), spec.img, { boss: !!mbr.boss, nativeLeft: true, scale: sz, flying: !!FLYING[mbr.eid] }); } }); });
     }
     pushEntities(S, { party: Wd.party }, E ? E.enemies : [], drawables, true);
+    pushDrops(drawables);
     drawables.sort((a, b) => a.d - b.d);
     for (const d of drawables) d.f();
     for (let i = fx.length - 1; i >= 0; i--) { if (!drawFx(fx[i], dt)) fx.splice(i, 1); }
@@ -660,7 +696,15 @@
     G.on('revive', (r) => { const e = ents[r.id]; if (e) addFx({ type: 'pillar', p: { x: e.x, y: e.y }, color: '#fff6d0', dur: 1.0 }); });
     G.on('kill', (k) => { if (k.boss) { showBanner('BOSS SLAIN', '#ff9a6a', 2.2); shake(); } });
     G.on('death', () => shake());
-    G.on('loot', (l) => { const e = ents[l.id]; if (e) floats.push({ wx: e.x, wy: e.y, dx: 0, dy: -34, vy: -0.6, life: 1.8, text: l.item.name, color: D.RARITIES[l.item.rarity].color, size: 10, bold: true }); });
+    G.on('drop', (dd) => { const e = ents[dd.id]; const S = G.S; const lead = e || ents[(S.run ? S.run.party[0] : S.world.party[0]).uid]; if (!lead) return; const a = Math.random() * Math.PI * 2, rr = e ? 0.25 + Math.random() * 0.45 : 1; drops[dd.drop.id] = { x: lead.x + Math.cos(a) * rr, y: lead.y + Math.sin(a) * rr, drop: dd.drop, t: 0 }; });
+    G.on('pickup', (pk) => {
+      const d = drops[pk.drop.id]; const e = pk.uid && ents[pk.uid]; const at = d || e; if (!at) return;
+      const dr = pk.drop; let y = -30;
+      if (dr.item) { floats.push({ wx: at.x, wy: at.y, dx: 0, dy: y, vy: -0.55, life: 2, text: dr.item.name, color: D.RARITIES[dr.item.rarity].color, size: dr.item.rarity >= 2 ? 12 : 10, bold: true }); y -= 14; }
+      if (dr.gold) { floats.push({ wx: at.x, wy: at.y, dx: 0, dy: y, vy: -0.55, life: 1.5, text: '+' + dr.gold + ' gold', color: '#f2c14e', size: 10, bold: false }); y -= 12; }
+      if (dr.mat) { const m = D.MATERIALS[dr.mat.id]; floats.push({ wx: at.x, wy: at.y, dx: 0, dy: y, vy: -0.55, life: 1.5, text: '+' + dr.mat.n + ' ' + ((m && m.name) || dr.mat.id), color: (m && m.color) || '#bbb', size: 10, bold: false }); }
+      if (d) delete drops[pk.drop.id];
+    });
     G.on('chest', (c) => { const S = G.S; const id = S.run ? null : (S.world.party[0] && S.world.party[0].uid); const e = id && ents[id]; if (e) floats.push({ wx: e.x, wy: e.y, dx: 0, dy: -40, vy: -0.6, life: 2, text: c.item.name, color: D.RARITIES[c.item.rarity].color, size: 11, bold: true }); });
     G.on('door', (d) => { if (d.boss) { const R = G.S.run; const e = R.next && R.next.find((x) => x.boss); showBanner(e ? e.name.toUpperCase() : 'BOSS', '#e0403a', 2.5); } else if (d.side) showBanner('A HIDDEN ALCOVE', '#e8b45a', 1.6); });
     G.on('encounter', (e) => { if (e.world && e.boss) showBanner((e.poi && e.poi.name ? e.poi.name : 'THE LAIR').toUpperCase(), '#e0403a', 2.5); });
@@ -668,9 +712,11 @@
     G.on('zone', (z) => { showBanner(z.map.title.toUpperCase(), '#e8b45a', 3); });
     G.on('poi', (p) => { if (p.type === 'dungeon') showBanner(p.name.toUpperCase(), '#d9a0ff', 2.5); else if (p.type === 'exit') showBanner('THE ROAD ONWARD', '#e8b45a', 2.2); else if (p.type === 'lair') showBanner('A LAIR', '#e0403a', 2); });
     G.on('quest', (q) => showBanner('QUEST COMPLETE', '#e8b45a', 2.2));
-    G.on('runstart', () => { cam.init = false; for (const k in ents) delete ents[k]; fx.length = 0; floats.length = 0; });
-    G.on('runend', () => { for (const k in ents) delete ents[k]; fx.length = 0; cam.init = false; trail.length = 0; });
-    G.on('surface', () => { for (const k in ents) delete ents[k]; cam.init = false; trail.length = 0; });
+    const clearDrops = () => { for (const k in drops) delete drops[k]; };
+    G.on('runstart', () => { cam.init = false; for (const k in ents) delete ents[k]; fx.length = 0; floats.length = 0; clearDrops(); });
+    G.on('runend', () => { for (const k in ents) delete ents[k]; fx.length = 0; cam.init = false; trail.length = 0; clearDrops(); });
+    G.on('surface', () => { for (const k in ents) delete ents[k]; cam.init = false; trail.length = 0; clearDrops(); });
+    G.on('floor', clearDrops); G.on('worldwipe', clearDrops);
     G.on('levelup', (l) => { const e = ents[l.hero.uid]; if (e) floats.push({ wx: e.x, wy: e.y, dx: 0, dy: -64, vy: -0.6, life: 1.8, text: 'LEVEL ' + l.hero.level, color: '#ffe08a', size: 12, bold: true }); });
   }
 

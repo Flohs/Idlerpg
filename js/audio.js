@@ -40,7 +40,7 @@
     G.on('float', (f) => { if (f.kind === 'crit') play('crit'); else if (f.kind === 'heal') play('heal', { minGap: 400 }); });
     G.on('kill', (k) => play(k.boss ? 'boss_die' : 'die'));
     G.on('death', () => play('hero_die'));
-    G.on('loot', () => play('loot', { minGap: 300 }));
+    G.on('pickup', (p) => { if (p.drop.item) play('loot', { minGap: 300 }); });
     G.on('chest', () => play('chest'));
     G.on('levelup', () => play('levelup', { minGap: 500 }));
     G.on('door', () => play('door'));

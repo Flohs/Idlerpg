@@ -388,8 +388,8 @@
   function waystones() { const w = [1]; for (let f = 10; f <= S.maxFloor; f += 10) w.push(f + 1); return w; }
 
   // ---------- battle context (dungeon run or overworld encounter) ----------
-  function cur() { if (S.run) return S.run; const Wd = S.world; if (Wd && Wd.phase === 'combat' && Wd.enc) return Wd.enc; return null; }
-  function inCombat() { return !!(S.world && S.world.phase === 'combat'); }
+  function cur() { if (S.run) return S.run; const Wd = S.world; if (Wd && (Wd.phase === 'combat' || Wd.phase === 'loot') && Wd.enc) return Wd.enc; return null; }
+  function inCombat() { return !!(S.world && (S.world.phase === 'combat' || S.world.phase === 'loot')); }
   function makePartyState(uids) { return uids.map((uid) => { const h = S.heroes.find((x) => x.uid === uid); const st = heroStats(h); return { uid, hp: st.hp, maxhp: st.hp, shield: 0, ap: Math.random() * 50, cds: {}, buffs: [], alive: true, taunt: 0, stun: 0, dots: [], target: null }; }); }
   function makeEnemy(eid, level, isBoss, cycle, scale) {
     const e = D.ENEMIES[eid];
@@ -430,7 +430,7 @@
     if (S.world && S.world.party) for (const p of party) { const wp = S.world.party.find((x) => x.uid === p.uid); if (wp) { p.hp = Math.min(p.maxhp, Math.max(Math.floor(p.maxhp * 0.3), wp.hp)); } }
     const ent = entrance && S.world ? S.world.map.pois.find((p) => p.id === entrance) : null;
     const lastFloor = ent && ent.floors ? ent.baseFloor + ent.floors - 1 : 0;
-    S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0, entrance: entrance || null, zone: S.world ? S.world.zone : 1, lastFloor };
+    S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], drops: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0, entrance: entrance || null, zone: S.world ? S.world.zone : 1, lastFloor };
     newFloorMap();
     S.stats.runs++;
     log(`The company descends. Floor ${startFloor}: ${biomeFor(startFloor).biome.name}.`, 'run');
@@ -526,24 +526,40 @@
     const lootBonus = Math.max(...alive.map((p) => heroStats(heroOf(p)).loot), 0);
     const deep = f >= 100 ? 2 : 1;
     const g = Math.floor(C.gold(f) * (e.boss ? 8 : 1) * goldBonus * rnd(0.8, 1.2) * deep);
-    B.gold += g;
     const xp = C.xp(f) * (e.boss ? 6 : 1);
     for (const p of B.party) giveXp(heroOf(p), p.alive ? xp : xp * 0.5, f);
     if (e.boss) { S.stats.bossKills++; log(`${e.name} is destroyed.`, 'boss'); }
+    // loot falls to the ground where the monster died; the company walks over to pick it up once the room is quiet
+    B.drops = B.drops || [];
+    const drop = { id: 'd' + (S.uid++), eid: e.id, gold: g, item: null, mat: null };
     const dropChance = (e.boss ? 1 : 0.14 + f * 0.001) * (1 + lootBonus / 100);
     if (chance(dropChance)) {
       const it = genItem(f + (e.boss ? 3 : 0) + (deep > 1 ? 5 : 0), { luck: (lootBonus + (e.boss ? 120 : 0)) * deep, minRarity: e.boss ? 1 : null });
-      B.bag.push(it); S.stats.itemsFound++;
+      drop.item = it; S.stats.itemsFound++;
       emit('loot', { item: it, id: e.id });
-      if (it.rarity >= 2) log(`Found ${it.name}!`, 'loot');
     }
-    if (chance(e.boss ? 1 : 0.1)) { const mat = S.run ? biomeFor(f).biome.material : D.BIOMES[Math.min(D.BIOMES.length - 1, Math.floor((f - 1) / D.FLOORS_PER_BIOME))].material; B.mats = B.mats || {}; B.mats[mat] = (B.mats[mat] || 0) + (e.boss ? 3 : 1); }
+    if (chance(e.boss ? 1 : 0.1)) { const mat = S.run ? biomeFor(f).biome.material : D.BIOMES[Math.min(D.BIOMES.length - 1, Math.floor((f - 1) / D.FLOORS_PER_BIOME))].material; drop.mat = { id: mat, n: e.boss ? 3 : 1 }; }
+    if (drop.gold > 0 || drop.item || drop.mat) { B.drops.push(drop); emit('drop', { drop, id: e.id }); }
     if (e.boss && S.unlocked.relics && chance(0.35)) {
       const pool = D.RELICS.filter((r) => !S.relics.includes(r.id));
       if (pool.length) { const r = pick(pool); S.relics.push(r.id); log(`Relic found: ${r.name} — ${r.desc}`, 'milestone'); emit('relic', r); }
     }
-    emit('float', { id: e.id, text: '+' + g + 'g', kind: 'gold' });
     emit('kill', { id: e.id, boss: e.boss });
+  }
+  const LOOT_TICKS = 12;
+  function applyDrop(B, d) {
+    if (d.gold) B.gold += d.gold;
+    if (d.item) { B.bag.push(d.item); if (d.item.rarity >= 2) log(`Found ${d.item.name}!`, 'loot'); }
+    if (d.mat) { B.mats = B.mats || {}; B.mats[d.mat.id] = (B.mats[d.mat.id] || 0) + d.mat.n; }
+    const p = B.party.find((x) => x.alive) || B.party[0];
+    S.stats.pickups = (S.stats.pickups || 0) + 1;
+    emit('pickup', { drop: d, uid: p && p.uid });
+  }
+  // after a fight: one drop is gathered every LOOT_TICKS ticks, then `done` runs
+  function lootTick(B, done) {
+    B.lootT = (B.lootT || 0) + 1; B.drops = B.drops || [];
+    if (B.drops.length) { if (B.lootT >= LOOT_TICKS) { B.lootT = 0; applyDrop(B, B.drops.shift()); } }
+    else if (B.lootT >= 4) { B.lootT = 0; done(); }
   }
 
   function partyWipe() {
@@ -712,6 +728,7 @@
     if (isBossFloor(R.floor)) R.bossFloorsCleared++;
     if (R.floor > S.maxFloor) { S.maxFloor = R.floor; S.stats.deepest = R.floor; checkMilestones(); }
     if (R.entrance && S.world) questProgress('delve', { entrance: R.entrance, floor: R.floor });
+    if (R.entrance && S.world && atBottom()) { const ent = S.world.map.pois.find((p) => p.id === R.entrance); if (ent) ent.done = true; }
     const f = R.floor;
     const lootBonus = partyLoot(R);
     const g = Math.floor(C.gold(f) * 3 * rnd(0.8, 1.3) * (1 + S.ascensions * 0.3)); R.gold += g;
@@ -737,7 +754,8 @@
       if (R.travelT >= need) arriveAtStop();
       return;
     }
-    if (R.phase === 'combat') { if (combatTick(R) && S.run) afterRoomCleared(); return; }
+    if (R.phase === 'combat') { if (combatTick(R) && S.run) { if (R.drops && R.drops.length) { R.phase = 'loot'; R.lootT = 0; } else afterRoomCleared(); } return; }
+    if (R.phase === 'loot') { lootTick(R, () => { if (S.run === R) afterRoomCleared(); }); return; }
     if (R.phase === 'floorclear') {
       R.waitT++;
       if (guildLevel() >= 1 && S.settings.autoDescend && R.waitT >= 25) {
@@ -822,12 +840,12 @@
   function lairDone() { const l = S.world.map.pois.find((p) => p.type === 'lair'); return !l || l.done; }
   function exitFound() { const e = S.world.map.pois.find((p) => p.type === 'exit'); return !!(e && e.found); }
   function canAdvance() { return lairDone() && exitFound(); }
-  function foundDungeons() { return S.world ? S.world.map.pois.filter((p) => p.type === 'dungeon' && p.found) : []; }
+  function foundDungeons() { return S.world ? S.world.map.pois.filter((p) => p.type === 'dungeon' && p.found && !p.done) : []; }
   function order(type, poiId, floor) {
     const Wd = S.world; if (!Wd) return 'No zone.';
     if (S.run) return 'The company is underground.';
     if (type === 'cancel') { Wd.order = null; Wd.path = []; Wd.dest = null; emit('order'); return null; }
-    if (type === 'dungeon') { const poi = Wd.map.pois.find((p) => p.id === poiId); if (!poi || !poi.found) return 'No such entrance.'; Wd.order = { type, poi: poiId, floor: floor || poi.baseFloor }; }
+    if (type === 'dungeon') { const poi = Wd.map.pois.find((p) => p.id === poiId); if (!poi || !poi.found) return 'No such entrance.'; if (poi.done) return 'That dungeon is already cleared.'; Wd.order = { type, poi: poiId, floor: floor || poi.baseFloor }; }
     else if (type === 'exit') { if (!canAdvance()) return lairDone() ? 'The way onward has not been found.' : 'The lair still rules this land.'; Wd.order = { type }; }
     Wd.path = []; Wd.dest = null; log(type === 'exit' ? 'Orders: march to the next zone.' : `Orders: descend into the ${Wd.map.pois.find((p) => p.id === poiId).name}.`, 'run');
     emit('order'); return null;
@@ -847,7 +865,7 @@
     if (poi.members) { for (const mbr of poi.members) { const e = makeEnemy(mbr.eid, mbr.boss ? lvl + 2 : lvl, !!mbr.boss, 0); e.ox = mbr.ox; e.oy = mbr.oy; list.push(e); } if (poi.type !== 'lair') { const extra = Math.max(0, S.party.length - 2 + Math.min(3, Math.floor(Wd.zone / 2))); for (let i = 0; i < extra; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); } else for (let i = 0; i < S.party.length - 1; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
     else if (poi.type === 'lair') { list.push(makeEnemy(poi.boss, lvl + 2, true, 0)); for (let i = 0; i < 1 + S.party.length; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
     else { const n = Math.max(2, (poi.size || 3) - 3 + S.party.length + Math.min(3, Math.floor(Wd.zone / 2))); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
-    Wd.enc = { party: Wd.party, enemies: list, floor: lvl, gold: 0, bag: [], mats: {}, kills: 0, potions: Wd.potions, poi: poi.id, world: true };
+    Wd.enc = { party: Wd.party, enemies: list, floor: lvl, gold: 0, bag: [], drops: [], mats: {}, kills: 0, potions: Wd.potions, poi: poi.id, world: true };
     Wd.phase = 'combat'; Wd.path = []; Wd.dest = null;
     log(poi.type === 'lair' ? `${poi.name} rises to meet the company.` : 'A monster pack closes in.', poi.type === 'lair' ? 'boss' : 'run');
     emit('encounter', { boss: poi.type === 'lair', enemies: list, world: true, poi });
@@ -923,13 +941,14 @@
     Wd.idleT++;
     if (Wd.idleT % 50 === 1) {
       const allDone = !activeQuest();
-      if (guildLevel() >= 3 && S.settings.autoDelve) { const d = m.pois.find((p) => p.type === 'dungeon' && p.found && !((Wd.cleared || {})[p.id] >= p.baseFloor)); if (d) { order('dungeon', d.id, d.baseFloor); return; } }
+      if (guildLevel() >= 3 && S.settings.autoDelve) { const d = m.pois.find((p) => p.type === 'dungeon' && p.found && !p.done && !((Wd.cleared || {})[p.id] >= p.baseFloor)); if (d) { order('dungeon', d.id, d.baseFloor); return; } }
       if (guildLevel() >= 6 && S.settings.autoNextZone && allDone && canAdvance()) { order('exit'); return; }
     }
   }
   function worldTick() {
     const Wd = S.world; if (!Wd) return;
-    if (Wd.phase === 'combat') { if (Wd.enc && combatTick(Wd.enc) && Wd.phase === 'combat') endEncounter(); return; }
+    if (Wd.phase === 'combat') { if (Wd.enc && combatTick(Wd.enc) && Wd.phase === 'combat') { if (Wd.enc.drops && Wd.enc.drops.length) { Wd.phase = 'loot'; Wd.enc.lootT = 0; } else endEncounter(); } return; }
+    if (Wd.phase === 'loot') { if (!Wd.enc) { Wd.phase = 'explore'; return; } lootTick(Wd.enc, () => { if (Wd.phase === 'loot') endEncounter(); }); return; }
     if (Wd.phase === 'dead') { Wd.deadT++; if (Wd.deadT >= 60) { Wd.pos = { x: Wd.map.start.x, y: Wd.map.start.y }; for (const p of Wd.party) { p.alive = true; p.hp = Math.floor(p.maxhp * 0.6); p.dots = []; p.buffs = []; } Wd.phase = 'explore'; emit('surface'); } return; }
     // regeneration on the surface
     Wd.regenT++; if (Wd.regenT >= 10) { Wd.regenT = 0; for (const p of Wd.party) if (p.alive && p.hp < p.maxhp) p.hp = Math.min(p.maxhp, p.hp + Math.max(1, Math.floor(p.maxhp * 0.01))); }

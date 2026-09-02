@@ -78,18 +78,17 @@
         const auto = G.guildLevel() >= 1 && S.settings.autoDescend;
         html += `<div class="panel decision"><div class="center small muted mb">${newBiome ? `<span class="gold">A new dungeon opens below: ${esc(next.biome.name)}.</span> ` : ''}Party health ${pct(avg)}${alive.length < R.party.length ? ` · <span class="blood">${R.party.length - alive.length} fallen</span>` : ''}${auto ? ' · <span class="green">auto-deciding…</span>' : ''}</div>
           <div class="btnrow"><button class="btn big ${G.atBottom() ? 'primary' : ''}" id="btn-extract">EXTRACT<small>to the surface · bank ${R.bag.length} items · ${fmt(R.gold)} gold</small></button>${G.atBottom() ? '' : `<button class="btn big primary" id="btn-descend">GO DEEPER<small>Floor ${R.floor + 1}${G.isBossFloor(R.floor + 1) ? ' · BOSS' : ''}${newBiome ? ' · ' + esc(next.biome.name) : ''}</small></button>`}</div>${G.atBottom() ? '<div class="tiny muted center mt">The dungeon ends here. Deeper dungeons wait in later zones.</div>' : ''}</div>`;
-      } else html += `<div class="row" style="padding:0 10px"><button class="btn small ghost" id="btn-abandon">Abandon run</button><span class="grow"></span><span class="tiny muted">${R.phase === 'travel' ? 'Advancing…' : 'Fighting'}</span></div>`;
+      } else html += `<div class="row" style="padding:0 10px"><button class="btn small ghost" id="btn-abandon">Abandon run</button><span class="grow"></span><span class="tiny muted">${R.phase === 'travel' ? 'Advancing…' : R.phase === 'loot' ? 'Gathering loot' : 'Fighting'}</span></div>`;
     } else if (Wd) {
       const m = Wd.map; const theme = D.ZONE_THEMES.find((t) => t.id === m.theme);
-      const phase = Wd.phase === 'combat' ? 'Fighting' : Wd.phase === 'dead' ? 'Fallen…' : Wd.order ? (Wd.order.type === 'exit' ? 'Marching to the road onward' : 'Marching to the ' + esc((m.pois.find((p) => p.id === Wd.order.poi) || {}).name || 'dungeon')) : Wd.uncovered ? 'Zone charted' : 'Exploring';
+      const phase = Wd.phase === 'combat' ? 'Fighting' : Wd.phase === 'loot' ? 'Gathering loot' : Wd.phase === 'dead' ? 'Fallen…' : Wd.order ? (Wd.order.type === 'exit' ? 'Marching to the road onward' : 'Marching to the ' + esc((m.pois.find((p) => p.id === Wd.order.poi) || {}).name || 'dungeon')) : Wd.uncovered ? 'Zone charted' : 'Exploring';
       label.innerHTML = `<span>Zone <b>${Wd.zone}</b> · <span class="biome">${esc(m.title)}</span></span><span>${phase}</span>`;
       const aq = G.activeQuest(); const ql = $('#quest-line'); ql.classList.remove('hidden');
-      ql.innerHTML = aq ? `<b>${esc(aq.name)}</b>${aq.target ? ` <span class="q-prog">${aq.progress || 0}/${aq.target}</span>` : ''}<span class="q-desc"> — ${esc(aq.desc)}</span>` : `<b>${esc(m.title)} is done.</b><span class="q-desc"> — march on when you are ready.</span>`;
-      html += `<div class="panel">${partyCards(Wd.party)}${Wd.phase === 'combat' && Wd.enc ? enemyRows(Wd.enc.enemies) : ''}
-        <div class="row between mt small"><span>Charted <b>${Math.round(G.exploredPct() * 100)}%</b> · Packs <b>${m.pois.filter((p) => p.type === 'pack' && p.done).length}/${m.pois.filter((p) => p.type === 'pack').length}</b></span><span class="muted">${Wd.potions > 0 ? '⚗ ' + Wd.potions : ''}</span></div></div>`;
-      // orders
-      const dungeons = G.foundDungeons();
-      html += `<div class="panel"><h3>Orders <small>${Wd.order ? 'in effect' : 'the company explores on its own'}</small></h3>`;
+      ql.innerHTML = `<span class="q-side">${Math.round(G.exploredPct() * 100)}% charted</span>` + (aq ? `<b>${esc(aq.name)}</b>${aq.target ? ` <span class="q-prog">${aq.progress || 0}/${aq.target}</span>` : ''}<span class="q-desc"> — ${esc(aq.desc)}</span>` : `<b>${esc(m.title)} is done.</b><span class="q-desc"> — march on when you are ready.</span>`);
+      html += `<div class="panel">${partyCards(Wd.party)}${Wd.phase === 'combat' && Wd.enc ? enemyRows(Wd.enc.enemies) : ''}${Wd.potions > 0 ? `<div class="row between mt small"><span class="muted">⚗ ${Wd.potions} potions</span></div>` : ''}</div>`;
+      // orders: only shown when there is something to order
+      const dungeons = G.foundDungeons(); const can = G.canAdvance();
+      if (dungeons.length || Wd.order || can) html += `<div class="panel"><h3>Orders <small>${Wd.order ? 'in effect' : 'the company explores on its own'}</small></h3>`;
       if (Wd.order) html += `<div class="row between small"><span>${phase}.</span><button class="btn small" id="btn-cancel-order">Cancel</button></div>`;
       if (dungeons.length) {
         for (const d of dungeons) {
@@ -100,10 +99,9 @@
             ${ws.length > 1 ? `<div class="chips mt">${ws.map((f) => `<button class="chip ${descendFloor[d.id] === f ? 'active' : ''}" data-ws="${d.id}:${f}">Floor ${f}</button>`).join('')}</div>` : ''}
             <button class="btn primary big mt ${Wd.order && Wd.order.poi === d.id ? '' : 'pulse'}" data-descend="${d.id}" ${Wd.order && Wd.order.poi === d.id ? 'disabled' : ''}>DESCEND · ${esc(d.name).toUpperCase()}<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">the company walks to the entrance and goes down at floor ${descendFloor[d.id]}</small></button></div>`;
         }
-      } else if (!Wd.order) html += `<div class="tiny muted mt">No way down found yet.</div>`;
-      const can = G.canAdvance();
+      }
       if (can) html += `<button class="btn big mt primary" id="btn-exit" ${!(Wd.order && Wd.order.type === 'exit') ? '' : 'disabled'}>MARCH TO THE NEXT ZONE<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">the road onward is open</small></button>`;
-      html += '</div>';
+      if (dungeons.length || Wd.order || can) html += '</div>';
     }
     panel.innerHTML = html;
     $$('[data-hero]', panel).forEach((b) => b.addEventListener('click', () => heroSheet(b.dataset.hero)));
@@ -116,7 +114,7 @@
     const ba = $('#btn-abandon'); if (ba) ba.addEventListener('click', () => { const m = modal(`<h2>Abandon the run?</h2><p class="small muted">Everything in the bag is lost. Heroes keep their experience.</p><div class="btnrow"><button class="btn" data-close>Stay</button><button class="btn danger" id="abandon-yes">Abandon</button></div>`); $('#abandon-yes').addEventListener('click', () => { m.close(); G.abandonRun(); markAll(); }); });
     dirty.dungeon = false;
   }
-  function renderLog() { const el = $('#log'); el.innerHTML = S.log.slice(-6).reverse().map((l) => `<div class="${l.k}">${esc(l.t)}</div>`).join(''); }
+  function renderLog() { /* no event log on screen: pickups and events are shown as text effects in the scene */ }
 
   // ---------- Heroes tab ----------
   function renderHeroes() {
@@ -361,9 +359,10 @@
     if (dead) rows.push(['Gold lost', fmt(r.goldLost)], ['Items recovered', r.items], ['Items lost', r.itemsLost]);
     else if (r.type === 'extract') { rows.push(['Items banked', r.kept]); if (r.sold) rows.push(['Auto-sold', r.sold]); if (r.salvaged) rows.push(['Auto-salvaged', r.salvaged]); const ms = Object.entries(r.mats || {}); if (ms.length) rows.push(['Materials', ms.map(([k, v]) => v + ' ' + D.MATERIALS[k].name).join(', ')]); }
     else rows.push(['Items lost', r.itemsLost]);
+    const entPoi = r.entrance && S.world ? S.world.map.pois.find((p) => p.id === r.entrance) : null; const again = !!(entPoi && !entPoi.done);
     const m = modal(`<div class="big-title ${dead ? 'dead' : 'good'}">${title}</div>${rows.map(([k, v]) => `<div class="summary-stat"><span class="muted">${k}</span><b>${v}</b></div>`).join('')}
-      <div class="tiny muted mt">${dead ? 'The company wakes at the zone\'s start. The Shrine keeps a share of the bag when they die below.' : 'The company climbs back into daylight at the entrance. Sell or salvage the junk, equip the best — then go again.'}</div>
-      <div class="btnrow"><button class="btn" data-close>Surface</button>${r.entrance ? `<button class="btn primary" id="re-again">Descend again</button>` : ''}</div>`);
+      <div class="tiny muted mt">${dead ? 'The company wakes at the zone\'s start. The Shrine keeps a share of the bag when they die below.' : again ? 'The company climbs back into daylight at the entrance. Sell or salvage the junk, equip the best — then go again.' : 'The company climbs back into daylight. This dungeon is cleared; the company returns to charting the land.'}</div>
+      <div class="btnrow"><button class="btn" data-close>Surface</button>${again ? `<button class="btn primary" id="re-again">Descend again</button>` : ''}</div>`);
     const ra = $('#re-again', m.el); if (ra) ra.addEventListener('click', () => { m.close(); if (err(G.order('dungeon', r.entrance, S.ui.startFloor))) markAll(); });
   }
   function offlineSheet(rep) {
@@ -408,7 +407,7 @@
       if (dirty.dungeon) { renderDungeon(); renderLog(); }
       else if (now - lastPartyRender > 400) {
         lastPartyRender = now;
-        const B = S.run || (S.world && S.world.phase === 'combat' ? S.world.enc : null);
+        const B = S.run || (S.world && (S.world.phase === 'combat' || S.world.phase === 'loot') ? S.world.enc : null);
         const party = S.run ? S.run.party : (S.world ? S.world.party : []);
         party.forEach((p) => { const card = $(`#dungeon-panel .pcard[data-hero="${p.uid}"]`); if (!card) return; const bar = $('.bar > i', card); if (bar) bar.style.width = pct(p.hp / p.maxhp); const sh = $('.sh', card); if (sh) sh.style.width = pct(Math.min(1, p.shield / p.maxhp)); const t = $('.tiny.muted', card); if (t) t.textContent = `L${S.heroes.find((h) => h.uid === p.uid).level} · ${fmt(p.hp)}/${fmt(p.maxhp)}`; card.classList.toggle('dead', !p.alive); });
         if (B) B.enemies.forEach((e) => { const row = $(`#dungeon-panel .erow[data-enemy="${e.id}"]`); if (!row) { if (e.alive) dirty.dungeon = true; return; } if (!e.alive) { row.remove(); return; } $('.bar > i', row).style.width = pct(e.hp / e.maxhp); $('.hp', row).textContent = fmt(e.hp); });
@@ -430,7 +429,7 @@
     G.on('levelup', () => { dirty.heroes = true; dirty.hud = true; });
     G.on('runstart', () => { markAll(); });
     G.on('runend', (r) => { markAll(); closeModals(); runEndSheet(r); });
-    ['floorclear', 'floor', 'encounter', 'encounterend', 'roomclear', 'death', 'revive', 'loot', 'potion', 'chest', 'order', 'zone', 'surface', 'worldwipe', 'shrineused'].forEach((ev) => G.on(ev, () => { dirty.dungeon = true; dirty.hud = true; }));
+    ['floorclear', 'floor', 'encounter', 'encounterend', 'roomclear', 'death', 'revive', 'pickup', 'potion', 'chest', 'order', 'zone', 'surface', 'worldwipe', 'shrineused'].forEach((ev) => G.on(ev, () => { dirty.dungeon = true; dirty.hud = true; }));
     G.on('kill', () => { dirty.hud = true; });
     G.on('inv', () => { markAll(); });
     G.on('village', () => { markAll(); });
