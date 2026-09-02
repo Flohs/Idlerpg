@@ -116,7 +116,7 @@
     const dn = ri(1, 2);
     for (let i = 0; i < dn; i++) { const d = place('dungeon', Math.floor(maxD * 0.2), Math.floor(maxD * 0.8), 24); if (d) { d.name = `${ADJ[ri(0, ADJ.length - 1)]} ${theme.dungeon}`; d.baseFloor = (zone - 1) * 10 + 1; d.floors = zone >= 8 ? 0 : zone; } }
     const packs = ri(8, 12);
-    for (let i = 0; i < packs; i++) { const c = place('pack', 12, maxD, 11); if (c) { c.size = ri(2, 4); c.members = []; for (let k = 0; k < c.size; k++) c.members.push({ eid: theme.enemies[ri(0, theme.enemies.length - 1)], ox: rnd(), oy: rnd() }); } }
+    for (let i = 0; i < packs; i++) { const c = place('pack', 12, maxD, 11); if (c) { c.size = ri(2, zone === 1 ? 3 : 4); c.members = []; for (let k = 0; k < c.size; k++) c.members.push({ eid: theme.enemies[ri(0, theme.enemies.length - 1)], ox: rnd(), oy: rnd() }); } }
     for (let i = 0; i < 3; i++) place('shrine', 10, maxD, 14);
     for (let i = 0; i < 6; i++) place('chest', 8, maxD, 9);
     for (const po of map.pois) { if (po.type !== 'exit' && po.type !== 'dungeon' && po.type !== 'lair') continue; const path = pathFromPar(map, r.par, po.y * w + po.x); for (const t of path) if (tiles[t.y * w + t.x] === GROUND) tiles[t.y * w + t.x] = PATH; }

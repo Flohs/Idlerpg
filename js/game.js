@@ -897,7 +897,7 @@
     Wd.pos = { x: nxt.x, y: nxt.y };
     const n = WD().reveal(m, Wd.explored, nxt.x, nxt.y, 5);
     if (n) { recount(); questProgress('uncover');
-      for (const poi of m.pois) if (!poi.found && Wd.explored[poi.y * m.w + poi.x]) { poi.found = true; log(`Discovered: ${poi.name || poi.type}.`, 'good'); emit('poi', poi); if (poi.type === 'dungeon') questProgress('found', poi); }
+      for (const poi of m.pois) if (!poi.found && Wd.explored[poi.y * m.w + poi.x]) { poi.found = true; if (poi.type === 'dungeon' || poi.type === 'lair' || poi.type === 'exit') log(`Discovered: ${poi.name || (poi.type === 'exit' ? 'the road onward' : poi.type)}.`, 'good'); emit('poi', poi); if (poi.type === 'dungeon') questProgress('found', poi); }
       if (!Wd.uncovered && exploredPct() >= 0.995) { Wd.uncovered = true; log(`${m.title} is fully charted.`, 'milestone'); }
     }
     const here = poiAt(nxt.x, nxt.y); if (here) visitPoi(here);
