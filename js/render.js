@@ -40,7 +40,7 @@
   function resize() {
     const wrap = canvas.parentElement; const w = wrap.clientWidth || 390;
     DPR = Math.min(2, window.devicePixelRatio || 1);
-    W = w; H = Math.round(w * 0.8);
+    W = w; H = Math.round(w * 0.95);
     canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
     canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);

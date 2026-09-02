@@ -770,19 +770,31 @@
     Wd.party = S.party.map((uid) => { const prev = old.find((p) => p.uid === uid); const h = S.heroes.find((x) => x.uid === uid); const st = heroStats(h); if (prev) { const ratio = prev.maxhp ? prev.hp / prev.maxhp : 1; prev.maxhp = st.hp; prev.hp = Math.min(st.hp, Math.floor(st.hp * ratio)); return prev; } return makePartyState([uid])[0]; });
     if (Wd.enc) Wd.enc.party = Wd.party;
   }
+  // ---- quests: one linear chain per zone; only the active quest is shown ----
   function makeQuests(map) {
-    const theme = D.ZONE_THEMES.find((t) => t.id === map.theme);
+    const lvl = WD().zoneLevel(map.zone);
     const q = [];
-    q.push({ id: 'uncover', name: `Chart the ${theme.name}`, desc: 'Uncover 90% of the zone.', done: false, reward: { gold: 40 * WD().zoneLevel(map.zone) } });
     const camps = map.pois.filter((p) => p.type === 'camp');
-    if (camps.length) q.push({ id: 'camps', name: 'Break the camps', desc: `Destroy all ${camps.length} monster camps.`, done: false, progress: 0, target: camps.length, reward: { gold: 60 * WD().zoneLevel(map.zone), item: 1 } });
-    const lair = map.pois.find((p) => p.type === 'lair');
-    if (lair) q.push({ id: 'lair', name: `Slay ${lair.name}`, desc: 'Break every camp first; then the lair will answer. Opens the road onward.', done: false, reward: { points: 1, item: 2 } });
+    if (camps.length) q.push({ id: 'camps', name: 'Break the camps', desc: `Destroy the ${camps.length} monster camps that hold this land.`, done: false, progress: 0, target: camps.length, reward: { gold: 60 * lvl, item: 1 } });
     const dg = map.pois.filter((p) => p.type === 'dungeon');
-    dg.forEach((d, i) => { q.push({ id: 'find_' + d.id, name: `Find the ${d.name}`, desc: 'Somewhere in this zone a way down is hidden.', done: false, reward: { gold: 30 * WD().zoneLevel(map.zone) } }); q.push({ id: 'delve_' + d.id, name: `Clear the ${d.name}`, desc: `Descend and clear floor ${d.baseFloor}.`, done: false, entrance: d.id, floor: d.baseFloor, reward: { item: 2, gold: 50 * WD().zoneLevel(map.zone) } }); });
-    const shrines = map.pois.filter((p) => p.type === 'shrine');
-    if (shrines.length) q.push({ id: 'shrines', name: 'Pray at every shrine', desc: `Visit all ${shrines.length} shrines.`, done: false, progress: 0, target: shrines.length, reward: { gold: 25 * WD().zoneLevel(map.zone) } });
+    dg.forEach((d) => {
+      q.push({ id: 'find_' + d.id, name: `Find the ${d.name}`, desc: 'A way down is hidden somewhere in this zone.', done: false, poi: d.id, reward: { gold: 30 * lvl } });
+      q.push({ id: 'delve_' + d.id, name: `Clear the ${d.name}`, desc: `Order the company down and clear floor ${d.baseFloor}.`, done: false, entrance: d.id, floor: d.baseFloor, reward: { item: 2, gold: 50 * lvl } });
+    });
+    const lair = map.pois.find((p) => p.type === 'lair');
+    if (lair) q.push({ id: 'lair', name: `Slay ${lair.name}`, desc: 'Find the lair and kill what rules this land.', done: false, reward: { points: 1, item: 2 } });
+    q.push({ id: 'road', name: 'Find the road onward', desc: 'Somewhere at the far edge of the zone the road continues.', done: false, reward: { gold: 40 * lvl } });
     return q;
+  }
+  function activeQuest() { const Wd = S.world; return Wd ? Wd.quests.find((q) => !q.done) || null : null; }
+  function questMet(q) {
+    const Wd = S.world; const m = Wd.map;
+    if (q.id === 'camps') { q.progress = m.pois.filter((p) => p.type === 'camp' && p.done).length; return q.progress >= q.target; }
+    if (q.id.startsWith('find_')) { const d = m.pois.find((p) => p.id === q.poi); return !!(d && d.found); }
+    if (q.id.startsWith('delve_')) return (Wd.cleared && Wd.cleared[q.entrance] || 0) >= q.floor;
+    if (q.id === 'lair') return lairDone();
+    if (q.id === 'road') return exitFound();
+    return false;
   }
   function completeQuest(q) {
     if (q.done) return; q.done = true; S.stats.quests++;
@@ -793,18 +805,14 @@
     if (r.points) { for (const h of S.heroes) { h.points = (h.points || 0) + r.points; if (h.autoSkills) autoSpend(h); } parts.push(`+${r.points} skill point for every hero`); }
     log(`Quest complete: ${q.name}. Reward: ${parts.join(', ')}.`, 'milestone');
     emit('quest', q);
+    const nxt = activeQuest(); if (nxt) log(`New quest: ${nxt.name}.`, 'run');
   }
+  // re-evaluate the active quest (and any that are already satisfied behind it)
   function questProgress(kind, info) {
     const Wd = S.world; if (!Wd) return;
-    for (const q of Wd.quests) {
-      if (q.done) continue;
-      if (kind === 'uncover' && q.id === 'uncover' && exploredPct() >= 0.9) completeQuest(q);
-      if (kind === 'camp' && q.id === 'camps') { q.progress = Wd.map.pois.filter((p) => p.type === 'camp' && p.done).length; if (q.progress >= q.target) completeQuest(q); }
-      if (kind === 'lair' && q.id === 'lair') completeQuest(q);
-      if (kind === 'found' && q.id === 'find_' + info.id) completeQuest(q);
-      if (kind === 'delve' && q.entrance === info.entrance && info.floor >= q.floor) completeQuest(q);
-      if (kind === 'shrine' && q.id === 'shrines') { q.progress = Wd.map.pois.filter((p) => p.type === 'shrine' && p.done).length; if (q.progress >= q.target) completeQuest(q); }
-    }
+    if (kind === 'delve' && info) { Wd.cleared = Wd.cleared || {}; Wd.cleared[info.entrance] = Math.max(Wd.cleared[info.entrance] || 0, info.floor); }
+    let guard = 0;
+    while (guard++ < 10) { const q = activeQuest(); if (!q) break; if (questMet(q)) completeQuest(q); else break; }
   }
   function lairDone() { const l = S.world.map.pois.find((p) => p.type === 'lair'); return !l || l.done; }
   function exitFound() { const e = S.world.map.pois.find((p) => p.type === 'exit'); return !!(e && e.found); }
@@ -908,8 +916,8 @@
     // everything done: automation decides
     Wd.idleT++;
     if (Wd.idleT % 50 === 1) {
-      const allDone = Wd.quests.every((q) => q.done || q.id.startsWith('delve_') || q.id.startsWith('find_'));
-      if (guildLevel() >= 3 && S.settings.autoDelve) { const d = m.pois.find((p) => p.type === 'dungeon' && p.found && !Wd.quests.find((q) => q.entrance === p.id && q.done)); if (d) { order('dungeon', d.id, d.baseFloor); return; } }
+      const allDone = !activeQuest();
+      if (guildLevel() >= 3 && S.settings.autoDelve) { const d = m.pois.find((p) => p.type === 'dungeon' && p.found && !((Wd.cleared || {})[p.id] >= p.baseFloor)); if (d) { order('dungeon', d.id, d.baseFloor); return; } }
       if (guildLevel() >= 6 && S.settings.autoNextZone && allDone && canAdvance()) { order('exit'); return; }
     }
   }
@@ -981,7 +989,7 @@
       for (const p of S.run.party) if (p.target === undefined) p.target = null;
     }
     if (!S.world) newZone(1);
-    else { const Wd = S.world; if (Wd.enc) { Wd.enc.party = Wd.party; for (const e of Wd.enc.enemies) e.spec = D.ENEMIES[e.eid]; } syncWorldParty(); }
+    else { const Wd = S.world; if (Wd.enc) { Wd.enc.party = Wd.party; for (const e of Wd.enc.enemies) e.spec = D.ENEMIES[e.eid]; } if (!Wd.quests || !Wd.quests.some((q) => q.id === 'road')) { Wd.quests = makeQuests(Wd.map); questProgress('migrate'); } syncWorldParty(); }
   }
   function load() {
     try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; S = JSON.parse(raw); } catch (e) { return false; }
@@ -1024,7 +1032,7 @@
     craft, craftCost, craftIlvl, upgrade, upgradeCost, upgradeCap, enchant, enchantCost,
     buildingCost, buildingAvailable, upgradeBuilding, collectMine, guildLevel,
     startRun, extract, descend, abandonRun, waystones, biomeFor, isBossFloor, difficultyMult, travelNeed, currentSeg, TICKS_PER_TILE, cur, inCombat,
-    order, exploredPct, canAdvance, lairDone, exitFound, foundDungeons, nextZone, newZone,
+    order, exploredPct, canAdvance, lairDone, exitFound, foundDungeons, nextZone, newZone, activeQuest,
     canAscend, ascensionReward, ascend, buyPerk, checkMilestones, xpToNext: C.xpToNext,
   };
 })();

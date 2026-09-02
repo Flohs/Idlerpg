@@ -67,6 +67,7 @@
     let html = '';
     if (R) {
       const bf = G.biomeFor(R.floor); const encTotal = R.map.encounters; const stop = R.map.route[R.room];
+      $('#quest-line').classList.add('hidden');
       label.innerHTML = `<span>Floor <b>${R.floor}</b> · <span class="biome">${esc(bf.biome.name)}${bf.cycle ? ' ' + 'I'.repeat(bf.cycle + 1) : ''}</span></span><span>${R.phase === 'floorclear' ? 'Exit' : (stop && stop.boss && R.phase === 'combat') ? 'BOSS' : (stop && stop.side && R.phase === 'combat') ? 'Alcove' : 'Room ' + Math.min(encTotal, (R.encDone || 0) + 1) + '/' + encTotal}</span>`;
       html += `<div class="panel">${partyCards(R.party)}${R.phase === 'combat' ? enemyRows(R.enemies) : ''}
         <div class="row between mt small"><span>Bag <b>${R.bag.length}</b> · Gold <b class="gold">${fmt(R.gold)}</b> · Kills <b>${R.kills}</b></span><span class="muted">${R.potions > 0 ? '⚗ ' + R.potions : ''} ${R.floorsCleared ? '· ' + R.floorsCleared + ' floors' : ''}</span></div>
@@ -82,6 +83,8 @@
       const m = Wd.map; const theme = D.ZONE_THEMES.find((t) => t.id === m.theme);
       const phase = Wd.phase === 'combat' ? 'Fighting' : Wd.phase === 'dead' ? 'Fallen…' : Wd.order ? (Wd.order.type === 'exit' ? 'Marching to the road onward' : 'Marching to the ' + esc((m.pois.find((p) => p.id === Wd.order.poi) || {}).name || 'dungeon')) : Wd.uncovered ? 'Zone charted' : 'Exploring';
       label.innerHTML = `<span>Zone <b>${Wd.zone}</b> · <span class="biome">${esc(m.title)}</span></span><span>${phase}</span>`;
+      const aq = G.activeQuest(); const ql = $('#quest-line'); ql.classList.remove('hidden');
+      ql.innerHTML = aq ? `<b>${esc(aq.name)}</b>${aq.target ? ` <span class="q-prog">${aq.progress || 0}/${aq.target}</span>` : ''}<span class="q-desc"> — ${esc(aq.desc)}</span>` : `<b>${esc(m.title)} is done.</b><span class="q-desc"> — march on when you are ready.</span>`;
       html += `<div class="panel">${partyCards(Wd.party)}${Wd.phase === 'combat' && Wd.enc ? enemyRows(Wd.enc.enemies) : ''}
         <div class="row between mt small"><span>Charted <b>${Math.round(G.exploredPct() * 100)}%</b> · Camps <b>${m.pois.filter((p) => p.type === 'camp' && p.done).length}/${m.pois.filter((p) => p.type === 'camp').length}</b></span><span class="muted">${Wd.potions > 0 ? '⚗ ' + Wd.potions : ''}</span></div></div>`;
       // orders
@@ -92,17 +95,15 @@
         for (const d of dungeons) {
           const ws = G.waystones().filter((f) => f >= d.baseFloor); if (!ws.includes(d.baseFloor)) ws.unshift(d.baseFloor);
           if (!descendFloor[d.id] || !ws.includes(descendFloor[d.id])) descendFloor[d.id] = ws[ws.length - 1];
-          const cleared = Wd.quests.find((q) => q.entrance === d.id && q.done);
+          const cleared = (Wd.cleared || {})[d.id] >= d.baseFloor;
           html += `<div class="mt"><div class="row between"><b class="c3">${esc(d.name)}</b><span class="tiny muted">floor ${d.baseFloor}+ ${cleared ? '· cleared' : ''}</span></div>
             ${ws.length > 1 ? `<div class="chips mt">${ws.map((f) => `<button class="chip ${descendFloor[d.id] === f ? 'active' : ''}" data-ws="${d.id}:${f}">Floor ${f}</button>`).join('')}</div>` : ''}
             <button class="btn primary big mt ${Wd.order && Wd.order.poi === d.id ? '' : 'pulse'}" data-descend="${d.id}" ${Wd.order && Wd.order.poi === d.id ? 'disabled' : ''}>DESCEND · ${esc(d.name).toUpperCase()}<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">the company walks to the entrance and goes down at floor ${descendFloor[d.id]}</small></button></div>`;
         }
-      } else html += `<div class="small muted mt">No dungeon entrance found yet. Keep exploring — every zone hides at least one way down.</div>`;
+      } else if (!Wd.order) html += `<div class="tiny muted mt">No way down found yet.</div>`;
       const can = G.canAdvance();
-      html += `<button class="btn big mt ${can ? 'primary' : ''}" id="btn-exit" ${can && !(Wd.order && Wd.order.type === 'exit') ? '' : 'disabled'}>MARCH TO THE NEXT ZONE<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">${can ? 'the road onward is open' : G.lairDone() ? 'find the road onward first' : 'slay the lair boss to open the road'}</small></button></div>`;
-      // quests
-      html += `<div class="panel"><h3>Quests <small>${Wd.quests.filter((q) => q.done).length}/${Wd.quests.length}</small></h3>${Wd.quests.map((q) => `<div class="milestone-row ${q.done ? 'done' : ''}"><span class="fl">${q.done ? '✓' : '·'}</span><span><b>${esc(q.name)}</b>${q.target ? ` <span class="muted">${q.progress || 0}/${q.target}</span>` : ''} — <span class="muted">${esc(q.desc)}</span></span></div>`).join('')}
-        <div class="tiny muted mt">${esc(theme.flavor)}</div></div>`;
+      if (can) html += `<button class="btn big mt primary" id="btn-exit" ${!(Wd.order && Wd.order.type === 'exit') ? '' : 'disabled'}>MARCH TO THE NEXT ZONE<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">the road onward is open</small></button>`;
+      html += '</div>';
     }
     panel.innerHTML = html;
     $$('[data-hero]', panel).forEach((b) => b.addEventListener('click', () => heroSheet(b.dataset.hero)));
@@ -411,7 +412,7 @@
         const party = S.run ? S.run.party : (S.world ? S.world.party : []);
         party.forEach((p) => { const card = $(`#dungeon-panel .pcard[data-hero="${p.uid}"]`); if (!card) return; const bar = $('.bar > i', card); if (bar) bar.style.width = pct(p.hp / p.maxhp); const sh = $('.sh', card); if (sh) sh.style.width = pct(Math.min(1, p.shield / p.maxhp)); const t = $('.tiny.muted', card); if (t) t.textContent = `L${S.heroes.find((h) => h.uid === p.uid).level} · ${fmt(p.hp)}/${fmt(p.maxhp)}`; card.classList.toggle('dead', !p.alive); });
         if (B) B.enemies.forEach((e) => { const row = $(`#dungeon-panel .erow[data-enemy="${e.id}"]`); if (!row) { if (e.alive) dirty.dungeon = true; return; } if (!e.alive) { row.remove(); return; } $('.bar > i', row).style.width = pct(e.hp / e.maxhp); $('.hp', row).textContent = fmt(e.hp); });
-        if (!S.run && S.world) { const k = S.world.phase + '|' + (S.world.order ? S.world.order.type : '') + '|' + Math.round(G.exploredPct() * 100); if (k !== lastLabel) { lastLabel = k; dirty.dungeon = true; } }
+        if (!S.run && S.world) { const aq = G.activeQuest(); const k = S.world.phase + '|' + (S.world.order ? S.world.order.type : '') + '|' + Math.round(G.exploredPct() * 100) + '|' + (aq ? aq.id + (aq.progress || 0) : 'none'); if (k !== lastLabel) { lastLabel = k; dirty.dungeon = true; } }
       }
     } else if (dirty[currentTab]) renderTab(currentTab);
   }
