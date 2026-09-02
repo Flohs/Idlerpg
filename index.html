@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0a09">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>GRIMDELVE — an idle descent</title>
+  <link rel="icon" href="assets/img/item_weapon.webp">
+  <link rel="apple-touch-icon" href="assets/img/hero_knight.webp">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="hud">
+      <div class="hud-left">
+        <span class="res" id="hud-gold" title="Gold"><i class="ico gold"></i><b>0</b></span>
+        <span class="res" id="hud-scrap" title="Scrap Iron"><i class="ico scrap"></i><b>0</b></span>
+        <span class="res" id="hud-essence" title="Dark Essence"><i class="ico essence"></i><b>0</b></span>
+        <span class="res hidden" id="hud-ember" title="Embers"><i class="ico ember"></i><b>0</b></span>
+      </div>
+      <div class="hud-right">
+        <button class="btn-speed" id="btn-speed">1×</button>
+        <button class="btn-icon" id="btn-settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <main id="view">
+      <section id="tab-dungeon" class="tab active">
+        <div id="scene-wrap">
+          <canvas id="scene"></canvas>
+          <div id="scene-label"></div>
+        </div>
+        <div id="dungeon-panel"></div>
+        <div id="log" class="log"></div>
+      </section>
+      <section id="tab-heroes" class="tab"></section>
+      <section id="tab-stash" class="tab"></section>
+      <section id="tab-forge" class="tab"></section>
+      <section id="tab-village" class="tab"></section>
+    </main>
+
+    <nav id="tabs">
+      <button data-tab="dungeon" class="active"><span class="t-ico">⚔</span><span>Delve</span></button>
+      <button data-tab="heroes"><span class="t-ico">☠</span><span>Heroes</span></button>
+      <button data-tab="stash"><span class="t-ico">▣</span><span>Stash</span></button>
+      <button data-tab="forge"><span class="t-ico">⚒</span><span>Forge</span></button>
+      <button data-tab="village"><span class="t-ico">⌂</span><span>Village</span></button>
+    </nav>
+
+    <div id="toasts"></div>
+    <div id="modal-root"></div>
+    <div id="intro" class="hidden"></div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
