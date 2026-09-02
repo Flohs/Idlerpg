@@ -29,6 +29,7 @@
   let banner = null, shakeT = 0, lastT = 0, torchPhase = 0, lastFloorKey = '', lastZoneKey = '';
   const trail = []; // leader trail for the snake formation on the surface
   let minimap = null, minimapCount = -1, minimapZone = '';
+  let blendNoise = null, blendNoise2 = null, blendKey = '';
   const serif = () => getComputedStyle(document.body).getPropertyValue('--serif');
   const RANGED_ENEMY = { plague_cultist: 'dark', imp: 'fire', watcher: 'dark', void_spawn: 'dark', myconid: 'poison', mother_spore: 'poison', the_unmaker: 'dark', starved_god: 'dark', frost_king: 'ice', frost_wight: 'ice', forge_master: 'fire', spore_crawler: 'poison', faceless: 'dark' };
   const FLYING = { grave_bat: 1, imp: 1, watcher: 1, void_spawn: 1 };
@@ -509,22 +510,28 @@
     const wb = worldBounds();
     const X0 = Math.max(0, wb.x0), X1 = Math.min(mw - 1, wb.x1), Y0 = Math.max(0, wb.y0), Y1 = Math.min(mh - 1, wb.y1);
     const groundP = new Path2D(), pathP = new Path2D(), pathSoft = new Path2D(), waterP = new Path2D(), shoreP = new Path2D(), revealed = new Path2D(), rockP = new Path2D();
+    if (!blendNoise || blendKey !== zoneKey) { blendKey = zoneKey; blendNoise = Wr.noiseField(Wd.seed + 77, mw, mh, 5); blendNoise2 = Wr.noiseField(Wd.seed + 991, mw, mh, 9); }
+    const blends = []; // [tx, ty, alpha] for the second ground texture, layered by noise
     for (let ty = Y0; ty <= Y1; ty++) for (let tx = X0; tx <= X1; tx++) {
       const i = ty * mw + tx; if (!Wd.explored[i]) continue;
       revealed.rect(tx - 0.3, ty - 0.3, 1.6, 1.6);
       const v = tiles[i];
       if (v === Wr.WATER) { waterP.rect(tx, ty, 1, 1); shoreP.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); }
-      else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); } }
+      else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); } const b = blendNoise[i] * 0.65 + blendNoise2[i] * 0.35; if (b > 0.52 && v !== Wr.PATH) blends.push([tx, ty, Math.min(1, (b - 0.52) / 0.16)]); }
       if (v === Wr.ROCK) {
         rockP.rect(tx, ty, 1, 1);
         const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const t2 = Wr.walkable(map, tx + dx, ty + dy); return t2; });
         if (edge && (tx * 7 + ty * 11) % 5 !== 0) drawables.push({ d: tx + ty + 1, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); if (!drawSpriteImg('prop_rock', { x: p.x, y: p.y + 6 }, 26 + ((tx * 3 + ty * 5) % 3) * 8)) { ctx.fillStyle = '#2a2622'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); } } });
       }
-      else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); if (!drawSpriteImg(theme.tree, { x: p.x, y: p.y + 4 }, 58 + ((tx * 7 + ty * 3) % 3) * 8)) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + 4); ctx.closePath(); ctx.fill(); } } });
+      else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); const big = map.bigTrees && map.bigTrees[i]; if (!drawSpriteImg(big ? theme.bigTree : theme.tree, { x: p.x, y: p.y + 4 }, big ? 128 + ((tx * 5 + ty * 3) % 3) * 14 : 78 + ((tx * 7 + ty * 3) % 3) * 10)) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + 4); ctx.closePath(); ctx.fill(); } } });
     }
+    for (const c of map.clutter || []) { const i = c.y * mw + c.x; if (!Wd.explored[i] || c.x < X0 || c.x > X1 || c.y < Y0 || c.y > Y1) continue; drawables.push({ d: c.x + c.y + 1.05, f: () => { const p = toScreen(c.x + 0.5, c.y + 0.5); drawSpriteImg(theme.clutter[c.k % theme.clutter.length], { x: p.x, y: p.y + 6 }, 44 + c.k * 8); } }); }
     isoTransform();
     const gp = pattern(theme.ground, 5), pp = pattern(theme.path, 4), wp = pattern('tile_water', 4, (torchPhase * 0.12) % 4);
     ctx.fillStyle = gp || theme.tint; ctx.fill(groundP);
+    // second ground layer with soft, noise-driven transitions (each cell slightly oversized so neighbours overlap)
+    const ap = pattern(theme.alt, 5);
+    if (ap) { ctx.fillStyle = ap; for (const [bx, by, a] of blends) { ctx.globalAlpha = a * 0.92; ctx.fillRect(bx - 0.35, by - 0.35, 1.7, 1.7); } ctx.globalAlpha = 1; }
     const rp = pattern('tile_rock', 4); ctx.fillStyle = rp || '#2a2622'; ctx.fill(rockP); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(rockP);
     if (pp) { ctx.globalAlpha = 0.45; ctx.fillStyle = pp; ctx.fill(pathSoft); ctx.globalAlpha = 0.95; ctx.fill(pathP); ctx.globalAlpha = 1; }
     ctx.globalAlpha = 0.4; ctx.fillStyle = '#05090b'; ctx.fill(shoreP); ctx.globalAlpha = 1;
@@ -648,7 +655,7 @@
   function preloadAll() {
     const keys = ['bg_village', 'tile_door', 'tile_water', 'tile_rock', 'prop_chest', 'prop_camp', 'prop_dungeon', 'prop_shrine', 'prop_lair', 'prop_exit', 'prop_town', 'prop_rock'];
     for (const c in D.CLASSES) { keys.push('sp_' + c); keys.push(D.CLASSES[c].img); }
-    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); }
+    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); keys.push(t.alt); keys.push(t.bigTree); for (const c of t.clutter) keys.push(c); }
     for (const b of D.BIOMES) { keys.push('tile_' + b.id + '_floor'); keys.push('tile_' + b.id + '_wall'); keys.push(b.bg); }
     for (const s of D.SLOTS) keys.push(D.SLOT_ICON[s]);
     preload(keys);

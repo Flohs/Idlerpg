@@ -13,7 +13,7 @@ const args = process.argv.slice(2);
 const hours = parseFloat(args[0] || '2');   // simulated play hours
 const verbose = args.includes('-v');
 
-G.newGame(['knight', 'rogue', 'priest']);
+G.newGame(['knight']); for (const h of G.S.heroes) { h.autoSkills = true; }
 const S = () => G.S;
 let lastFloorLog = 0;
 G.on('milestone', (m) => console.log(`  [milestone] floor ${S().maxFloor}: ${m.name}`));

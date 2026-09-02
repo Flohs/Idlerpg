@@ -5,7 +5,7 @@ const ctx = { console, localStorage: { getItem: (k) => store[k] || null, setItem
 ctx.window = ctx; vm.createContext(ctx);
 for (const f of ['data.js', 'skills.js', 'dungeon.js', 'world.js', 'game.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 const G = ctx.Game; const assert = (c, m) => { if (!c) { console.error('FAIL:', m); process.exitCode = 1; } else console.log('ok:', m); };
-G.newGame(['knight', 'rogue', 'priest']);
+G.newGame(['knight']); for (const h of G.S.heroes) { h.autoSkills = true; }
 const S = G.S;
 S.maxFloor = 62; G.checkMilestones();
 assert(S.unlocked.ascension && S.unlocked.abyss && S.unlocked.paladin, 'milestones unlock through floor 60');
@@ -28,7 +28,7 @@ assert(G.waystones().join(',') === '1', 'waystones reset');
 S.embers += 10; G.buyPerk('legacy_depth'); assert(!G.startRun(1), 'start run'); assert(S.run.floor === 6, 'legacy_depth starts at floor 6, got ' + S.run.floor);
 G.abandonRun();
 // shrine revive at exit
-S.perks = {}; S.buildings.shrine = 4; S.buildings.guild = 0; for (const h of S.heroes) h.level = 10; G.startRun(1);
+S.perks = {}; S.buildings.shrine = 4; S.buildings.guild = 0; S.gold += 100000; if (S.heroes.length < 2) G.recruit('priest'); for (const h of S.heroes) h.level = 10; G.startRun(1);
 S.run.party[1].alive = false; S.run.party[1].hp = 0;
 let guard = 0; while (S.run && S.run.phase !== 'floorclear' && guard++ < 50000) G.tick();
 assert(S.run && S.run.party[1].alive, 'fallen hero revived at floor exit');

@@ -162,6 +162,7 @@ select { background: var(--panel2); color: var(--text); border: 1px solid var(--
 .toast.milestone { border-color: var(--gold2); background: linear-gradient(#3a2a10, #1a1208); text-align: center; }
 .toast.milestone b { display: block; font-size: 15px; color: var(--gold2); letter-spacing: 1px; }
 .toast.bad { border-color: var(--blood2); }
+.toast.bad b { display: block; color: var(--blood2); letter-spacing: 1px; }
 @keyframes toast { from { transform: translateY(-10px); opacity: 0; } }
 
 /* Intro */

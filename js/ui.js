@@ -343,12 +343,12 @@
     const chosen = new Set();
     const render = () => {
       el.innerHTML = `<div class="inner"><h1>GRIMDELVE</h1><div class="sub">There is no bottom. There is only further.</div>
-        <div class="small center mb">Choose <b>three</b> to form the first company.</div>
+        <div class="small center mb">Choose <b>one</b> hero to walk out of the gate. Others can be hired at the Tavern later.</div>
         <div class="pick-grid">${D.STARTER_CLASSES.map((c) => { const cls = D.CLASSES[c]; return `<div class="pick ${chosen.has(c) ? 'sel' : ''}" data-c="${c}">${portrait(cls.img, 'lg')}<div class="nm">${cls.name}</div><div class="tl">${esc(cls.tagline)}</div><div class="st">${cls.role.toUpperCase()} · ${cls.trait.name}</div></div>`; }).join('')}</div>
-        <button class="btn primary big mt ${chosen.size === 3 ? 'pulse' : ''}" id="intro-go" ${chosen.size === 3 ? '' : 'disabled'}>LEAVE THE GATE</button>
-        <div class="tiny muted center mt">Your heroes explore the blighted land on their own: they fight, loot and chart every zone. When they find a way underground, order them down. In the dungeon, after every floor you choose: extract with what you carry, or go deeper. Die below, and the bag is lost.</div></div>`;
-      $$('[data-c]', el).forEach((b) => b.addEventListener('click', () => { const c = b.dataset.c; if (chosen.has(c)) chosen.delete(c); else if (chosen.size < 3) chosen.add(c); render(); }));
-      $('#intro-go', el).addEventListener('click', () => { if (chosen.size !== 3) return; G.newGame(Array.from(chosen)); S = G.S; el.classList.add('hidden'); el.innerHTML = ''; markAll(); renderAll(); showTab('dungeon'); });
+        <button class="btn primary big mt ${chosen.size === 1 ? 'pulse' : ''}" id="intro-go" ${chosen.size === 1 ? '' : 'disabled'}>LEAVE THE GATE</button>
+        <div class="tiny muted center mt">Your hero starts with nothing but a basic attack; every level brings a skill point to spend in the tree. They explore the blighted land on their own: fight, loot, chart every zone. When they find a way underground, order them down. In the dungeon, after every floor you choose: extract with what you carry, or go deeper. Die below, and the bag is lost.</div></div>`;
+      $$('[data-c]', el).forEach((b) => b.addEventListener('click', () => { const c = b.dataset.c; chosen.clear(); chosen.add(c); render(); }));
+      $('#intro-go', el).addEventListener('click', () => { if (chosen.size !== 1) return; G.newGame(Array.from(chosen)); S = G.S; el.classList.add('hidden'); el.innerHTML = ''; markAll(); renderAll(); showTab('dungeon'); });
     };
     render();
   }

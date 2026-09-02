@@ -27,17 +27,18 @@
 
   // ---------- scaling curves (tune here) ----------
   const C = {
-    enemyHP: (f) => 34 * Math.pow(f, 1.1) * Math.pow(1.06, f),
-    enemyATK: (f) => 6.5 * Math.pow(f, 0.85) * Math.pow(1.048, f),
-    enemyDEF: (f) => 2 + f * 1.0,
-    gold: (f) => (3 + f * 1.6) * Math.pow(1.03, f),
-    xp: (f) => (10 + f * 3.5) * Math.pow(1.028, f),
-    itemScale: (ilvl) => (1 + 0.11 * ilvl) * Math.pow(1.03, ilvl),
-    xpToNext: (lvl) => Math.floor(35 * Math.pow(lvl, 1.55) + 25 * lvl),
-    mitigation: (def, lvl) => def / (def + 50 + 5 * (lvl || 1)),
+    // Diablo-like curves: small round numbers at the start, exponential later
+    enemyHP: (f) => 4 * Math.pow(f, 1.2) * Math.pow(1.055, f),
+    enemyATK: (f) => 1 + f * 0.8 * Math.pow(1.04, f),
+    enemyDEF: (f) => f * 0.8,
+    gold: (f) => (2 + f * 1.2) * Math.pow(1.03, f),
+    xp: (f) => 5 * f * Math.pow(1.1, f),
+    itemScale: (ilvl) => (1 + 0.12 * ilvl) * Math.pow(1.035, ilvl),
+    xpToNext: (lvl) => Math.floor(60 * Math.pow(1.24, lvl - 1)),
+    mitigation: (def, lvl) => def / (def + 20 + 3 * (lvl || 1)),
   };
   const TICKS_PER_TILE = 3;
-  const WORLD_TICKS_PER_TILE = 3;
+  const WORLD_TICKS_PER_TILE = 2;
 
   // ---------- state ----------
   function newState() {
@@ -57,10 +58,9 @@
   // ---------- heroes & skills ----------
   function createHero(clsId, level) {
     const cls = D.CLASSES[clsId];
-    const h = { uid: 'h' + (S.uid++), cls: clsId, name: cls.name, level: 1, xp: 0, equip: {}, kills: 0, skills: {}, points: 1, autoSkills: true };
+    const h = { uid: 'h' + (S.uid++), cls: clsId, name: cls.name, level: 1, xp: 0, equip: {}, kills: 0, skills: {}, points: 0, autoSkills: false };
     for (const s of D.SLOTS) h.equip[s] = null;
     while (h.level < (level || 1)) { h.level++; h.points++; }
-    autoSpend(h);
     return h;
   }
   function heroClass(h) { return D.CLASSES[h.cls]; }
@@ -203,8 +203,9 @@
     syncWorldParty(); emit('roster');
     return null;
   }
-  function giveXp(h, amount) {
+  function giveXp(h, amount, mlvl) {
     const bonus = 1 + (S.buildings.library * 0.1) + heroStats(h).xp / 100 + S.ascensions * 0.2;
+    if (mlvl) { const gap = h.level - mlvl - 5; if (gap > 0) amount *= Math.max(0.05, 1 - gap * 0.15); }
     h.xp += Math.floor(amount * bonus);
     let leveled = false;
     while (h.xp >= C.xpToNext(h.level)) {
@@ -242,7 +243,7 @@
     let v = (a.flat + a.per * ilvl) * (0.7 + Math.random() * 0.6) * (1 + rIdx * 0.15);
     if (a.pct) v = Math.min(a.max, v);
     else if (a.stat === 'crit' || a.stat === 'spd') v *= 1;
-    else v *= C.itemScale(ilvl) / (1 + 0.11 * ilvl);
+    else v *= C.itemScale(ilvl) / (1 + 0.12 * ilvl);
     return Math.round(v * 10) / 10;
   }
   function nameItem(it) {
@@ -411,9 +412,9 @@
     const R = S.run; const stop = R.map.route[stopIdx]; if (!stop || !stop.enc) return [];
     const f = R.floor; const { biome, cycle } = biomeFor(f);
     const list = [];
-    if (stop.boss) { list.push(makeEnemy(biome.boss, f, true, cycle)); const adds = 1 + Math.min(3, Math.floor(f / 15)); for (let i = 0; i < adds; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
-    else if (stop.side) { const n = 1 + rint(0, Math.min(3, 1 + Math.floor(f / 10))); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
-    else { const n = clamp(2 + rint(0, 2 + Math.min(4, Math.floor(f / 6))), 2, 8); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
+    if (stop.boss) { list.push(makeEnemy(biome.boss, f, true, cycle)); const adds = S.party.length + Math.min(3, Math.floor(f / 15)); for (let i = 0; i < adds; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
+    else if (stop.side) { const n = 1 + rint(0, Math.min(3, Math.floor(S.party.length / 2) + Math.floor(f / 10))); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
+    else { const n = clamp(1 + S.party.length + rint(0, 1 + Math.min(4, Math.floor(f / 6))), 2, 9); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(biome.enemies), f, false, cycle)); }
     return list;
   }
   function travelNeed() { const R = S.run; const seg = R.map.segs[R.room + 1]; return seg ? Math.max(6, seg.path.length * TICKS_PER_TILE) : 10; }
@@ -525,7 +526,7 @@
     const g = Math.floor(C.gold(f) * (e.boss ? 8 : 1) * goldBonus * rnd(0.8, 1.2) * deep);
     B.gold += g;
     const xp = C.xp(f) * (e.boss ? 6 : 1);
-    for (const p of B.party) giveXp(heroOf(p), p.alive ? xp : xp * 0.5);
+    for (const p of B.party) giveXp(heroOf(p), p.alive ? xp : xp * 0.5, f);
     if (e.boss) { S.stats.bossKills++; log(`${e.name} is destroyed.`, 'boss'); }
     const dropChance = (e.boss ? 1 : 0.14 + f * 0.001) * (1 + lootBonus / 100);
     if (chance(dropChance)) {
@@ -757,7 +758,7 @@
     Wd.quests = makeQuests(map);
     S.world = Wd;
     syncWorldParty();
-    WD().reveal(map, explored, Wd.pos.x, Wd.pos.y, 5); recount();
+    WD().reveal(map, explored, Wd.pos.x, Wd.pos.y, 6); recount();
     S.maxZone = Math.max(S.maxZone || 1, zone);
     log(`${map.title}. ${D.ZONE_THEMES.find((t) => t.id === map.theme).flavor}`, 'run');
     emit('zone', { zone, map });
@@ -839,8 +840,8 @@
     const Wd = S.world; const theme = D.ZONE_THEMES.find((t) => t.id === Wd.map.theme);
     const lvl = WD().zoneLevel(Wd.zone) + rint(0, 4);
     const list = [];
-    if (poi.type === 'lair') { list.push(makeEnemy(poi.boss, lvl + 2, true, 0)); for (let i = 0; i < 3; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
-    else { const n = (poi.size || 3) + Math.min(3, Math.floor(Wd.zone / 2)); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
+    if (poi.type === 'lair') { list.push(makeEnemy(poi.boss, lvl + 2, true, 0)); for (let i = 0; i < 1 + S.party.length; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
+    else { const n = Math.max(2, (poi.size || 3) - 3 + S.party.length + Math.min(3, Math.floor(Wd.zone / 2))); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
     Wd.enc = { party: Wd.party, enemies: list, floor: lvl, gold: 0, bag: [], mats: {}, kills: 0, potions: Wd.potions, poi: poi.id, world: true };
     Wd.phase = 'combat'; Wd.path = []; Wd.dest = null;
     log(`${poi.type === 'lair' ? poi.name + ' rises to meet the company.' : 'The ' + poi.name + ' stirs.'}`, poi.type === 'lair' ? 'boss' : 'run');
@@ -889,7 +890,7 @@
     if (nxt.x === Wd.pos.x && nxt.y === Wd.pos.y) { if (!Wd.path.length) return; return stepMove(); }
     Wd.dir = (nxt.x - Wd.pos.x) - (nxt.y - Wd.pos.y) >= 0 ? 1 : -1;
     Wd.pos = { x: nxt.x, y: nxt.y };
-    const n = WD().reveal(m, Wd.explored, nxt.x, nxt.y, 4);
+    const n = WD().reveal(m, Wd.explored, nxt.x, nxt.y, 5);
     if (n) { recount(); questProgress('uncover');
       for (const poi of m.pois) if (!poi.found && Wd.explored[poi.y * m.w + poi.x]) { poi.found = true; log(`Discovered: ${poi.name || poi.type}.`, 'good'); emit('poi', poi); if (poi.type === 'dungeon') questProgress('found', poi); }
       if (!Wd.uncovered && exploredPct() >= 0.995) { Wd.uncovered = true; log(`${m.title} is fully charted.`, 'milestone'); }
@@ -965,9 +966,9 @@
     S = newState();
     for (const cid of chosen) { const h = createHero(cid, 1); S.heroes.push(h); S.party.push(h.uid); }
     for (const h of S.heroes) { const it = genItem(1, { slot: 'weapon', wtype: heroClass(h).weapons[0] }); it.rarity = 0; it.affixes = []; nameItem(it); h.equip.weapon = it; }
-    S.gold = 30; S.started = true;
+    S.gold = 20; S.started = true;
     newZone(1);
-    log('The company walks out of the gate. Somewhere out there is a way down.', 'run');
+    log(`${S.heroes[0].name} walks out of the gate alone. Somewhere out there is a way down.`, 'run');
     save(); emit('newgame');
   }
   function save() { if (!S) return; S.lastSeen = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }
@@ -979,7 +980,7 @@
     for (const k in def.mats) if (S.mats[k] === undefined) S.mats[k] = 0;
     for (const k in def.buildings) if (S.buildings[k] === undefined) S.buildings[k] = 0;
     for (const h of S.heroes) {
-      if (!h.skills) { h.skills = {}; h.points = h.level; h.autoSkills = true; autoSpend(h); }
+      if (!h.skills) { h.skills = {}; h.points = h.level - 1; h.autoSkills = false; }
       if (h.points === undefined) h.points = 0;
     }
     if (S.run) {

@@ -6,13 +6,13 @@ No build step. Open `index.html` from any static host (GitHub Pages works) — e
 
 ## How it plays
 
-The company leaves the village gate into an **auto-generated open zone** (Diablo-style): they chart the map on their own, break monster camps, loot chests, pray at shrines and hunt the zone's lair boss. Every zone hides one or more **dungeon entrances**; once found, tap **Descend** and the company walks back to the entrance (from wherever they are) and goes down. Slaying the lair boss opens the **road to the next zone**; tap **March** when you are ready, or let the Guild automate it. Zones cycle through four themes (Blighted Moors, Fungal Fens, Frozen Reach, Ashen Wastes) and get harder every time.
+You start with a **single hero** who has nothing but a basic attack; skills come only from the points you spend (one per level from level 2), and companions are hired at the Tavern. The hero leaves the village gate into a large **auto-generated open zone** (Diablo-style, 96×96 tiles with layered terrain, blended transitions and sparse set pieces): they chart the map on their own, break monster camps, loot chests, pray at shrines and hunt the zone's lair boss. Every zone hides one or more **dungeon entrances**; once found, tap **Descend** and the company walks back to the entrance (from wherever they are) and goes down. Slaying the lair boss opens the **road to the next zone**; tap **March** when you are ready, or let the Guild automate it. Zones cycle through four themes (Blighted Moors, Fungal Fens, Frozen Reach, Ashen Wastes) and get harder every time.
 
 Below ground each floor is a chain of big doored rooms with side alcoves (chest rooms). Monsters wait behind the doors; heroes pick their foes and close in, ranged classes keep their distance, flying monsters hover and dive, and sky-borne spells rain down. After every floor: extract or go deeper.
 
-Each class has a **Diablo II style skill tree**: three tiers, nine skills (actives and passives), prerequisites, 20 ranks and synergies. Heroes earn a point per level (and from quests); auto-spend is on by default, or manage points yourself and respec for gold.
+Each class has a **Diablo II style skill tree**: three tiers, nine skills (actives and passives), prerequisites, 20 ranks and synergies. Heroes earn a point per level (and from quests); points are yours to place (an auto-spend toggle exists per hero), and you can respec for gold.
 
-Loot follows Diablo II's rarity curve: nearly everything is plain white, an uncommon is rare, a rare is an event.
+Hit points, damage and experience follow Diablo II's curves: a level-1 knight has 60 life and hits for a handful of points, monsters start with single-digit life, and every level costs about a quarter more than the last (with reduced experience from monsters far below your level). Loot follows Diablo II's rarity curve: nearly everything is plain white, an uncommon is rare, a rare is an event.
 
 ## Features
 

@@ -11,8 +11,8 @@
     knight: {
       id: 'knight', name: 'Knight', role: 'tank', img: 'hero_knight',
       tagline: 'Holds the line. Scarred, tired, unbroken.',
-      base: { hp: 150, atk: 14, def: 12, spd: 8, crit: 5 },
-      grow: { hp: 20, atk: 1.6, def: 1.5, spd: 0.15, crit: 0.1 },
+      base: { hp: 60, atk: 4, def: 6, spd: 8, crit: 4 },
+      grow: { hp: 3.2, atk: 0.45, def: 0.55, spd: 0.08, crit: 0.05 },
       weapons: ['sword', 'axe', 'mace'],
       trait: { name: 'Bulwark', desc: 'Takes 20% less damage when below half health.' },
       skills: ['shield_bash', 'taunt', 'iron_will', 'cleave', 'last_stand'],
@@ -20,8 +20,8 @@
     rogue: {
       id: 'rogue', name: 'Rogue', role: 'dps', img: 'hero_rogue',
       tagline: 'Gets there first. Gets out last.',
-      base: { hp: 95, atk: 20, def: 6, spd: 14, crit: 20 },
-      grow: { hp: 11, atk: 2.4, def: 0.7, spd: 0.3, crit: 0.35 },
+      base: { hp: 45, atk: 5, def: 3, spd: 12, crit: 12 },
+      grow: { hp: 2.2, atk: 0.55, def: 0.3, spd: 0.14, crit: 0.2 },
       weapons: ['dagger', 'sword', 'bow'],
       trait: { name: 'Opportunist', desc: 'Critical hits deal +50% bonus damage.' },
       skills: ['backstab', 'poison_blade', 'shadowstep', 'fan_of_knives', 'execute'],
@@ -29,8 +29,8 @@
     priest: {
       id: 'priest', name: 'War-Priest', role: 'support', img: 'hero_priest',
       tagline: 'Prays with a mace. The dead listen.',
-      base: { hp: 110, atk: 11, def: 8, spd: 9, crit: 5 },
-      grow: { hp: 13, atk: 1.3, def: 1.0, spd: 0.15, crit: 0.1 },
+      base: { hp: 50, atk: 3, def: 4, spd: 9, crit: 3 },
+      grow: { hp: 2.5, atk: 0.4, def: 0.4, spd: 0.08, crit: 0.05 },
       weapons: ['mace', 'staff'],
       trait: { name: 'Litany', desc: 'Party regenerates 1% health per round.' },
       skills: ['mend', 'smite', 'ward', 'purge', 'resurrection'],
@@ -38,8 +38,8 @@
     pyromancer: {
       id: 'pyromancer', name: 'Pyromancer', role: 'dps', img: 'hero_pyromancer',
       tagline: 'Burns everything. Including herself.',
-      base: { hp: 80, atk: 24, def: 4, spd: 10, crit: 10 },
-      grow: { hp: 9, atk: 3.0, def: 0.5, spd: 0.2, crit: 0.2 },
+      base: { hp: 40, atk: 6, def: 2, spd: 10, crit: 6 },
+      grow: { hp: 1.9, atk: 0.65, def: 0.2, spd: 0.1, crit: 0.1 },
       weapons: ['staff', 'dagger'],
       trait: { name: 'Kindling', desc: 'Burning enemies take +25% damage from her.' },
       skills: ['fireball', 'immolate', 'flame_wall', 'ashen_veil', 'inferno'],
@@ -47,8 +47,8 @@
     ranger: {
       id: 'ranger', name: 'Ranger', role: 'dps', img: 'hero_ranger',
       tagline: 'One eye. Never misses.',
-      base: { hp: 100, atk: 18, def: 7, spd: 12, crit: 15 },
-      grow: { hp: 12, atk: 2.2, def: 0.8, spd: 0.25, crit: 0.3 },
+      base: { hp: 48, atk: 5, def: 3, spd: 11, crit: 9 },
+      grow: { hp: 2.3, atk: 0.55, def: 0.3, spd: 0.12, crit: 0.15 },
       weapons: ['bow', 'dagger'],
       trait: { name: 'Marked Prey', desc: 'Attacks the lowest-health enemy.' },
       skills: ['aimed_shot', 'volley', 'crippling_shot', 'hunters_mark', 'rain_of_iron'],
@@ -56,8 +56,8 @@
     necromancer: {
       id: 'necromancer', name: 'Necromancer', role: 'support', img: 'hero_necromancer',
       tagline: 'Every corpse is a resource.',
-      base: { hp: 90, atk: 19, def: 5, spd: 9, crit: 8 },
-      grow: { hp: 10, atk: 2.3, def: 0.6, spd: 0.15, crit: 0.15 },
+      base: { hp: 42, atk: 5, def: 2, spd: 9, crit: 5 },
+      grow: { hp: 2.0, atk: 0.55, def: 0.25, spd: 0.08, crit: 0.1 },
       weapons: ['staff', 'dagger'],
       trait: { name: 'Harvest', desc: 'Party heals 8% of damage dealt to enemies below half health.' },
       skills: ['soul_drain', 'bone_shield', 'curse', 'wither', 'raise_dead'],
@@ -66,8 +66,8 @@
     berserker: {
       id: 'berserker', name: 'Berserker', role: 'dps', img: 'hero_berserker',
       tagline: 'Pain is fuel.',
-      base: { hp: 130, atk: 22, def: 6, spd: 10, crit: 12 },
-      grow: { hp: 16, atk: 2.8, def: 0.6, spd: 0.2, crit: 0.25 },
+      base: { hp: 65, atk: 6, def: 3, spd: 10, crit: 7 },
+      grow: { hp: 3.4, atk: 0.65, def: 0.3, spd: 0.1, crit: 0.12 },
       weapons: ['axe', 'sword', 'mace'],
       trait: { name: 'Frenzy', desc: 'Deals +1% damage per 1% missing health.' },
       skills: ['reckless_swing', 'bloodlust', 'whirlwind', 'war_cry', 'rampage'],
@@ -76,8 +76,8 @@
     paladin: {
       id: 'paladin', name: 'Paladin', role: 'tank', img: 'hero_paladin',
       tagline: 'Faith is armor. Armor is faith.',
-      base: { hp: 140, atk: 16, def: 11, spd: 8, crit: 6 },
-      grow: { hp: 18, atk: 1.9, def: 1.4, spd: 0.15, crit: 0.12 },
+      base: { hp: 58, atk: 4, def: 5, spd: 8, crit: 4 },
+      grow: { hp: 3.0, atk: 0.5, def: 0.5, spd: 0.08, crit: 0.06 },
       weapons: ['sword', 'mace'],
       trait: { name: 'Aegis', desc: 'Allies adjacent take 10% less damage.' },
       skills: ['holy_strike', 'consecrate', 'lay_on_hands', 'divine_shield', 'judgement'],
@@ -213,19 +213,19 @@
   ];
   // base stat by slot (scaled by item level)
   D.SLOT_BASE = {
-    weapon: { atk: 6 }, head: { def: 2, hp: 12 }, chest: { def: 4, hp: 20 }, hands: { atk: 2, def: 1 },
-    feet: { def: 1.5, spd: 1.2 }, ring: { crit: 3, atk: 1.5 }, amulet: { hp: 15, atk: 1.5 },
+    weapon: { atk: 3 }, head: { def: 1, hp: 4 }, chest: { def: 2, hp: 8 }, hands: { atk: 0.8, def: 0.5 },
+    feet: { def: 0.6, spd: 0.8 }, ring: { crit: 2, atk: 0.6 }, amulet: { hp: 6, atk: 0.6 },
   };
   D.WEAPON_TYPES = {
     sword: { name: 'Sword', atk: 1.0, crit: 4 }, axe: { name: 'Axe', atk: 1.15, crit: 0 }, mace: { name: 'Mace', atk: 1.05, def: 1.5 },
     dagger: { name: 'Dagger', atk: 0.85, crit: 10, spd: 1.5 }, bow: { name: 'Bow', atk: 0.95, crit: 6, spd: 0.8 }, staff: { name: 'Staff', atk: 1.1, hp: 10 },
   };
   D.AFFIXES = [
-    { id: 'atk', name: 'of Wrath', stat: 'atk', per: 1.2, flat: 2 },
-    { id: 'hp', name: 'of the Ox', stat: 'hp', per: 6, flat: 10 },
-    { id: 'def', name: 'of Stone', stat: 'def', per: 0.9, flat: 1 },
-    { id: 'spd', name: 'of Haste', stat: 'spd', per: 0.25, flat: 1 },
-    { id: 'crit', name: 'of Malice', stat: 'crit', per: 0.35, flat: 2 },
+    { id: 'atk', name: 'of Wrath', stat: 'atk', per: 0.35, flat: 1 },
+    { id: 'hp', name: 'of the Ox', stat: 'hp', per: 1.5, flat: 5 },
+    { id: 'def', name: 'of Stone', stat: 'def', per: 0.3, flat: 1 },
+    { id: 'spd', name: 'of Haste', stat: 'spd', per: 0.12, flat: 0.5 },
+    { id: 'crit', name: 'of Malice', stat: 'crit', per: 0.25, flat: 1 },
     { id: 'lifesteal', name: 'of the Leech', stat: 'lifesteal', per: 0.15, flat: 3, pct: true, max: 25 },
     { id: 'gold', name: 'of Greed', stat: 'gold', per: 0.5, flat: 4, pct: true, max: 60 },
     { id: 'xp', name: 'of Insight', stat: 'xp', per: 0.4, flat: 3, pct: true, max: 50 },
