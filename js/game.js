@@ -428,7 +428,9 @@
     startFloor += (S.perks.legacy_depth || 0) * D.ASCENSION_PERKS.find((p) => p.id === 'legacy_depth').val;
     const party = makePartyState(S.party);
     if (S.world && S.world.party) for (const p of party) { const wp = S.world.party.find((x) => x.uid === p.uid); if (wp) { p.hp = Math.min(p.maxhp, Math.max(Math.floor(p.maxhp * 0.3), wp.hp)); } }
-    S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0, entrance: entrance || null, zone: S.world ? S.world.zone : 1 };
+    const ent = entrance && S.world ? S.world.map.pois.find((p) => p.id === entrance) : null;
+    const lastFloor = ent && ent.floors ? ent.baseFloor + ent.floors - 1 : 0;
+    S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0, entrance: entrance || null, zone: S.world ? S.world.zone : 1, lastFloor };
     newFloorMap();
     S.stats.runs++;
     log(`The company descends. Floor ${startFloor}: ${biomeFor(startFloor).biome.name}.`, 'run');
@@ -582,8 +584,10 @@
     return null;
   }
   function shouldAutoSell(it) { const order = ['none', 'common', 'uncommon', 'rare']; const idx = order.indexOf(S.settings.autoSell); return idx > 0 && it.rarity <= idx - 1; }
+  function atBottom() { const R = S.run; return !!(R && R.lastFloor && R.floor >= R.lastFloor); }
   function descend() {
     const R = S.run; if (!R || R.phase !== 'floorclear') return 'Not at a floor exit.';
+    if (atBottom()) return 'This dungeon goes no deeper.';
     R.floor++;
     newFloorMap();
     const { biome } = biomeFor(R.floor);
@@ -719,7 +723,7 @@
     for (const p of R.party) if (p.alive) { heal(p, p.maxhp * restPct, true); p.dots = []; p.buffs = p.buffs.filter((b) => !(b.spd < 0 || b.atk < 0)); }
     if (S.buildings.shrine >= 4) for (const p of R.party) if (!p.alive) { p.alive = true; p.hp = Math.floor(p.maxhp * 0.25); p.ap = 0; p.cds = {}; log(`${label(p)} rises at the Shrine's call.`, 'good'); emit('revive', { id: p.uid }); }
     R.phase = 'floorclear'; R.waitT = 0;
-    log(`Floor ${f} cleared. Chest: ${chest.items[0].name}. Extract or go deeper?`, 'run');
+    log(atBottom() ? `Floor ${f} cleared. Chest: ${chest.items[0].name}. The dungeon ends here.` : `Floor ${f} cleared. Chest: ${chest.items[0].name}. Extract or go deeper?`, 'run');
     emit('floorclear', { floor: f, chest, next: biomeFor(f + 1).biome, newBiome: f % D.FLOORS_PER_BIOME === 0 });
   }
 
@@ -743,7 +747,7 @@
         const lowHp = guildLevel() >= 2 && avg < S.settings.autoExtractHp;
         const someoneDead = alive.length < R.party.length && guildLevel() >= 2;
         const bossAhead = guildLevel() >= 2 && isBossFloor(R.floor + 1) && avg < Math.min(0.75, S.settings.autoExtractHp + 0.3);
-        if (stop || lowHp || someoneDead || bossAhead) extract(); else descend();
+        if (stop || lowHp || someoneDead || bossAhead || atBottom()) extract(); else descend();
       }
     }
   }
@@ -775,8 +779,8 @@
   function makeQuests(map) {
     const lvl = WD().zoneLevel(map.zone);
     const q = [];
-    const camps = map.pois.filter((p) => p.type === 'camp');
-    if (camps.length) q.push({ id: 'camps', name: 'Break the camps', desc: `Destroy the ${camps.length} monster camps that hold this land.`, done: false, progress: 0, target: camps.length, reward: { gold: 60 * lvl, item: 1 } });
+    const camps = map.pois.filter((p) => p.type === 'pack');
+    if (camps.length) q.push({ id: 'packs', name: 'Cleanse the land', desc: `Slay the ${camps.length} monster packs roaming this zone.`, done: false, progress: 0, target: camps.length, reward: { gold: 60 * lvl, item: 1 } });
     const dg = map.pois.filter((p) => p.type === 'dungeon');
     dg.forEach((d) => {
       q.push({ id: 'find_' + d.id, name: `Find the ${d.name}`, desc: 'A way down is hidden somewhere in this zone.', done: false, poi: d.id, reward: { gold: 30 * lvl } });
@@ -790,7 +794,7 @@
   function activeQuest() { const Wd = S.world; return Wd ? Wd.quests.find((q) => !q.done) || null : null; }
   function questMet(q) {
     const Wd = S.world; const m = Wd.map;
-    if (q.id === 'camps') { q.progress = m.pois.filter((p) => p.type === 'camp' && p.done).length; return q.progress >= q.target; }
+    if (q.id === 'packs') { q.progress = m.pois.filter((p) => p.type === 'pack' && p.done).length; return q.progress >= q.target; }
     if (q.id.startsWith('find_')) { const d = m.pois.find((p) => p.id === q.poi); return !!(d && d.found); }
     if (q.id.startsWith('delve_')) return (Wd.cleared && Wd.cleared[q.entrance] || 0) >= q.floor;
     if (q.id === 'lair') return lairDone();
@@ -840,17 +844,18 @@
     const Wd = S.world; const theme = D.ZONE_THEMES.find((t) => t.id === Wd.map.theme);
     const lvl = WD().zoneLevel(Wd.zone) + rint(0, 4);
     const list = [];
-    if (poi.type === 'lair') { list.push(makeEnemy(poi.boss, lvl + 2, true, 0)); for (let i = 0; i < 1 + S.party.length; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
+    if (poi.members) { for (const mbr of poi.members) { const e = makeEnemy(mbr.eid, mbr.boss ? lvl + 2 : lvl, !!mbr.boss, 0); e.ox = mbr.ox; e.oy = mbr.oy; list.push(e); } if (poi.type !== 'lair') { const extra = Math.max(0, S.party.length - 2 + Math.min(3, Math.floor(Wd.zone / 2))); for (let i = 0; i < extra; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); } else for (let i = 0; i < S.party.length - 1; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
+    else if (poi.type === 'lair') { list.push(makeEnemy(poi.boss, lvl + 2, true, 0)); for (let i = 0; i < 1 + S.party.length; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
     else { const n = Math.max(2, (poi.size || 3) - 3 + S.party.length + Math.min(3, Math.floor(Wd.zone / 2))); for (let i = 0; i < n; i++) list.push(makeEnemy(pick(theme.enemies), lvl, false, 0)); }
     Wd.enc = { party: Wd.party, enemies: list, floor: lvl, gold: 0, bag: [], mats: {}, kills: 0, potions: Wd.potions, poi: poi.id, world: true };
     Wd.phase = 'combat'; Wd.path = []; Wd.dest = null;
-    log(`${poi.type === 'lair' ? poi.name + ' rises to meet the company.' : 'The ' + poi.name + ' stirs.'}`, poi.type === 'lair' ? 'boss' : 'run');
+    log(poi.type === 'lair' ? `${poi.name} rises to meet the company.` : 'A monster pack closes in.', poi.type === 'lair' ? 'boss' : 'run');
     emit('encounter', { boss: poi.type === 'lair', enemies: list, world: true, poi });
   }
   function endEncounter() {
     const Wd = S.world; const E = Wd.enc; if (!E) return;
     const poi = Wd.map.pois.find((p) => p.id === E.poi);
-    if (poi) { poi.done = true; if (poi.type === 'camp') { S.stats.campsCleared++; questProgress('camp'); } if (poi.type === 'lair') { questProgress('lair'); log('The lair is silent. The road onward is open.', 'milestone'); } }
+    if (poi) { poi.done = true; if (poi.type === 'pack') { S.stats.campsCleared++; questProgress('pack'); } if (poi.type === 'lair') { questProgress('lair'); log('The lair is silent. The road onward is open.', 'milestone'); } }
     S.gold += E.gold; S.stats.goldEarned += E.gold; Wd.potions = E.potions;
     for (const it of E.bag) addToStash(it);
     for (const k in E.mats) S.mats[k] = (S.mats[k] || 0) + E.mats[k];
@@ -897,8 +902,8 @@
     }
     const here = poiAt(nxt.x, nxt.y); if (here) visitPoi(here);
     // camps and the lair attack when the party comes close
-    const campsDone = !m.pois.some((p) => p.type === 'camp' && !p.done);
-    for (const poi of m.pois) { if ((poi.type === 'camp' || (poi.type === 'lair' && campsDone)) && !poi.done && Math.abs(poi.x - nxt.x) <= 2 && Math.abs(poi.y - nxt.y) <= 2) { startEncounter(poi); return; } }
+    const campsDone = !m.pois.some((p) => p.type === 'pack' && !p.done);
+    for (const poi of m.pois) { if ((poi.type === 'pack' || (poi.type === 'lair' && campsDone)) && !poi.done && Math.abs(poi.x - nxt.x) <= 2 && Math.abs(poi.y - nxt.y) <= 2) { startEncounter(poi); return; } }
   }
   function chooseDestination() {
     const Wd = S.world; const m = Wd.map; const W = WD();
@@ -908,8 +913,8 @@
       if (Wd.order.type === 'exit') { const poi = m.pois.find((p) => p.type === 'exit'); if (Wd.pos.x === poi.x && Wd.pos.y === poi.y) { Wd.order = null; nextZone(); return; } if (!goTo(poi)) Wd.order = null; return; }
     }
     // found-but-unvisited things nearby first (chests, shrines, camps, lair)
-    const campsLeft = m.pois.some((p) => p.type === 'camp' && !p.done);
-    const pending = m.pois.filter((p) => p.found && !p.done && (['chest', 'shrine', 'camp'].includes(p.type) || (p.type === 'lair' && !campsLeft)));
+    const campsLeft = m.pois.some((p) => p.type === 'pack' && !p.done);
+    const pending = m.pois.filter((p) => p.found && !p.done && (['chest', 'shrine', 'pack'].includes(p.type) || (p.type === 'lair' && !campsLeft)));
     if (pending.length) { const near = pending.map((p) => ({ p, d: Math.abs(p.x - Wd.pos.x) + Math.abs(p.y - Wd.pos.y) })).sort((a, b) => a.d - b.d); if (near[0].d <= 14 || Wd.uncovered) { for (const c of near) if (goTo(c.p)) return; } }
     const r = W.nearestUnexplored(m, Wd.explored, Wd.pos);
     if (r) { Wd.path = r.path; Wd.dest = r.tile; return; }
@@ -1032,7 +1037,7 @@
     sellItem, salvageItem, equipItem, unequip, autoEquip, autoEquipAll, canEquip, findItem, itemScore,
     craft, craftCost, craftIlvl, upgrade, upgradeCost, upgradeCap, enchant, enchantCost,
     buildingCost, buildingAvailable, upgradeBuilding, collectMine, guildLevel,
-    startRun, extract, descend, abandonRun, waystones, biomeFor, isBossFloor, difficultyMult, travelNeed, currentSeg, TICKS_PER_TILE, cur, inCombat,
+    startRun, extract, descend, abandonRun, atBottom, waystones, biomeFor, isBossFloor, difficultyMult, travelNeed, currentSeg, TICKS_PER_TILE, cur, inCombat,
     order, exploredPct, canAdvance, lairDone, exitFound, foundDungeons, nextZone, newZone, activeQuest,
     canAscend, ascensionReward, ascend, buyPerk, checkMilestones, xpToNext: C.xpToNext,
   };

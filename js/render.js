@@ -36,7 +36,7 @@
   const HERO_RANGED = { ranger: 'arrow', pyromancer: 'fire', necromancer: 'bolt', priest: 'holy' };
   const CLASS_COLOR = { knight: '#e8e0d0', rogue: '#c9d6ff', priest: '#ffe6a0', pyromancer: '#ff8a3a', ranger: '#cfe8b0', necromancer: '#8ff09a', berserker: '#ff6a5a', paladin: '#ffd66a' };
   const PROJ_COLOR = { arrow: '#d8d0c0', fire: '#ff8a2a', bolt: '#7dff8a', holy: '#ffe08a', dark: '#b57cff', poison: '#9be36a', ice: '#a9d1ff' };
-  const POI_SPRITE = { camp: ['prop_camp', 84], dungeon: ['prop_dungeon', 70], shrine: ['prop_shrine', 54], chest: ['prop_chest', 30], lair: ['prop_lair', 74], exit: ['prop_exit', 84], town: ['prop_town', 96], waypoint: ['prop_shrine', 54] };
+  const POI_SPRITE = { dungeon: ['prop_dungeon', 96], shrine: ['prop_shrine', 54], chest: ['prop_chest', 30], lair: ['prop_lair', 74], exit: ['prop_exit', 84], town: ['prop_town', 96], waypoint: ['prop_shrine', 54] };
 
   function resize() {
     const wrap = canvas.parentElement; const w = wrap.clientWidth || 390;
@@ -514,8 +514,8 @@
     const blends = []; // [tx, ty, alpha] for the second ground texture, layered by noise
     for (let ty = Y0; ty <= Y1; ty++) for (let tx = X0; tx <= X1; tx++) {
       const i = ty * mw + tx; if (!Wd.explored[i]) continue;
+      const v = tiles[i]; if (v === Wr.VOID) continue;
       revealed.rect(tx - 0.3, ty - 0.3, 1.6, 1.6);
-      const v = tiles[i];
       if (v === Wr.WATER) { waterP.rect(tx, ty, 1, 1); shoreP.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); }
       else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); } const b = blendNoise[i] * 0.65 + blendNoise2[i] * 0.35; if (b > 0.52 && v !== Wr.PATH) blends.push([tx, ty, Math.min(1, (b - 0.52) / 0.16)]); }
       if (v === Wr.ROCK) {
@@ -551,12 +551,16 @@
       const sp = POI_SPRITE[po.type]; if (!sp) continue;
       drawables.push({ d: po.x + po.y + 1.1, f: () => {
         const base = { x: p.x, y: p.y + TH / 2 + 6 };
-        if (!drawSpriteImg(sp[0], base, sp[1], { dark: po.done && (po.type === 'camp' || po.type === 'lair' || po.type === 'chest') })) { ctx.fillStyle = '#7a6a4a'; ctx.beginPath(); ctx.arc(base.x, base.y - 12, 10, 0, Math.PI * 2); ctx.fill(); }
-        if (po.type === 'camp' && !po.done) { const f = 0.8 + Math.sin(torchPhase * 8 + po.x) * 0.2; ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(base.x, base.y - 8, 2, base.x, base.y - 8, 40 * f); g.addColorStop(0, 'rgba(255,150,60,0.35)'); g.addColorStop(1, 'rgba(255,120,40,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(base.x, base.y - 8, 40 * f, 22 * f, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+        if (!drawSpriteImg(po.type === 'dungeon' ? theme.cave : sp[0], base, sp[1], { dark: po.done && (po.type === 'lair' || po.type === 'chest') })) { ctx.fillStyle = '#7a6a4a'; ctx.beginPath(); ctx.arc(base.x, base.y - 12, 10, 0, Math.PI * 2); ctx.fill(); }
         if (po.type === 'dungeon') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(base.x, base.y - 10, 2, base.x, base.y - 10, 30); g.addColorStop(0, 'rgba(255,130,50,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(base.x - 30, base.y - 40, 60, 40); ctx.restore(); }
-        const label = po.type === 'dungeon' ? po.name : po.type === 'exit' ? 'Road onward' : po.type === 'lair' ? (po.done ? 'Silent lair' : po.name) : po.type === 'town' ? 'Ashford' : po.type === 'waypoint' ? 'Waypoint' : po.type === 'camp' && !po.done ? po.name : null;
+        const label = po.type === 'dungeon' ? po.name : po.type === 'exit' ? 'Road onward' : po.type === 'lair' ? (po.done ? 'Silent lair' : po.name) : po.type === 'town' ? 'Ashford' : po.type === 'waypoint' ? 'Waypoint' : null;
         if (label) nameTag(base.x, base.y - sp[1] - 6, label, po.type === 'dungeon' ? '#d9a0ff' : po.type === 'lair' ? '#ff7a6a' : po.type === 'exit' ? '#e8b45a' : '#e6dcc6');
       } });
+    }
+    for (const po of map.pois) {
+      if (!po.members || !po.found || po.done || (E && E.poi === po.id)) continue;
+      const cp = toScreen(po.x + 0.5, po.y + 0.5); if (!inView(cp, 80)) continue;
+      po.members.forEach((mbr, k) => { const mx = po.x + 0.5 + (mbr.ox - 0.5) * 4, my = po.y + 0.5 + (mbr.oy - 0.5) * 4; const spec = D.ENEMIES[mbr.eid]; const sz = mbr.boss ? 1 : Math.max(0.7, Math.min(1.3, 0.72 + (spec ? spec.hp : 1) * 0.22)); drawables.push({ d: mx + my, f: () => { const idle = { x: mx, y: my, ldx: 0, ldy: 0, face: -1, flash: 0, bob: torchPhase * 1.5 + k }; drawSprite(idle, spec.img.replace('en_', 'sp_'), spec.img, { boss: !!mbr.boss, nativeLeft: true, scale: sz, flying: !!FLYING[mbr.eid] }); } }); });
     }
     pushEntities(S, { party: Wd.party }, E ? E.enemies : [], drawables, true);
     drawables.sort((a, b) => a.d - b.d);
@@ -577,14 +581,14 @@
       const g = minimap.getContext('2d'); g.scale(DPR, DPR);
       g.fillStyle = 'rgba(5,4,3,0.85)'; g.fillRect(0, 0, size, size);
       const Wr = WD();
-      const cols = { [Wr.GROUND]: '#4a4634', [Wr.PATH]: '#6e5a3a', [Wr.WATER]: '#1d3140', [Wr.ROCK]: '#2a2622', [Wr.TREE]: '#243019' };
-      for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) { const i = y * map.w + x; if (!Wd.explored[i]) continue; g.fillStyle = cols[map.tiles[i]] || '#333'; g.fillRect(x * sc, y * sc, sc + 0.5, sc + 0.5); }
+      const cols = { [Wr.GROUND]: '#4a4634', [Wr.PATH]: '#6e5a3a', [Wr.WATER]: '#1d3140', [Wr.ROCK]: '#2a2622', [Wr.TREE]: '#243019', [Wr.VOID]: null };
+      for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) { const i = y * map.w + x; if (!Wd.explored[i]) continue; const col = cols[map.tiles[i]]; if (!col) continue; g.fillStyle = col; g.fillRect(x * sc, y * sc, sc + 0.5, sc + 0.5); }
     }
     const x0 = W - size - 6, y0 = 6;
     ctx.drawImage(minimap, x0, y0, size, size);
     ctx.strokeStyle = 'rgba(200,170,110,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, size - 1, size - 1);
     const dot = (x, y, c, r) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x0 + (x + 0.5) * sc, y0 + (y + 0.5) * sc, r || 2, 0, Math.PI * 2); ctx.fill(); };
-    const pc = { camp: '#ff8a3a', lair: '#e0403a', dungeon: '#c98bff', exit: '#e8b45a', shrine: '#7fe0e0', chest: '#ffe08a', town: '#ffffff', waypoint: '#ffffff' };
+    const pc = { pack: '#ff8a3a', lair: '#e0403a', dungeon: '#c98bff', exit: '#e8b45a', shrine: '#7fe0e0', chest: '#ffe08a', town: '#ffffff', waypoint: '#ffffff' };
     for (const po of map.pois) if (po.found) dot(po.x, po.y, po.done && po.type !== 'dungeon' && po.type !== 'exit' ? 'rgba(120,120,120,0.6)' : pc[po.type] || '#fff', po.type === 'lair' || po.type === 'dungeon' || po.type === 'exit' ? 2.6 : 1.8);
     const blink = (Math.sin(torchPhase * 6) + 1) / 2;
     dot(Wd.pos.x, Wd.pos.y, 'rgba(255,255,255,' + (0.6 + blink * 0.4) + ')', 2.4);
@@ -653,9 +657,9 @@
 
   function start() { resize(); requestAnimationFrame(frame); }
   function preloadAll() {
-    const keys = ['bg_village', 'tile_door', 'tile_water', 'tile_rock', 'prop_chest', 'prop_camp', 'prop_dungeon', 'prop_shrine', 'prop_lair', 'prop_exit', 'prop_town', 'prop_rock'];
+    const keys = ['bg_village', 'tile_door', 'tile_water', 'tile_rock', 'prop_chest', 'prop_shrine', 'prop_lair', 'prop_exit', 'prop_town', 'prop_rock'];
     for (const c in D.CLASSES) { keys.push('sp_' + c); keys.push(D.CLASSES[c].img); }
-    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); keys.push(t.alt); keys.push(t.bigTree); for (const c of t.clutter) keys.push(c); }
+    for (const t of D.ZONE_THEMES) { keys.push(t.ground); keys.push(t.path); keys.push(t.tree); keys.push(t.alt); keys.push(t.bigTree); keys.push(t.cave); for (const c of t.clutter) keys.push(c); }
     for (const b of D.BIOMES) { keys.push('tile_' + b.id + '_floor'); keys.push('tile_' + b.id + '_wall'); keys.push(b.bg); }
     for (const s of D.SLOTS) keys.push(D.SLOT_ICON[s]);
     preload(keys);

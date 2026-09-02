@@ -77,7 +77,7 @@
         const alive = R.party.filter((p) => p.alive); const avg = alive.reduce((a, p) => a + p.hp / p.maxhp, 0) / alive.length;
         const auto = G.guildLevel() >= 1 && S.settings.autoDescend;
         html += `<div class="panel decision"><div class="center small muted mb">${newBiome ? `<span class="gold">A new dungeon opens below: ${esc(next.biome.name)}.</span> ` : ''}Party health ${pct(avg)}${alive.length < R.party.length ? ` · <span class="blood">${R.party.length - alive.length} fallen</span>` : ''}${auto ? ' · <span class="green">auto-deciding…</span>' : ''}</div>
-          <div class="btnrow"><button class="btn big" id="btn-extract">EXTRACT<small>to the surface · bank ${R.bag.length} items · ${fmt(R.gold)} gold</small></button><button class="btn big primary" id="btn-descend">GO DEEPER<small>Floor ${R.floor + 1}${G.isBossFloor(R.floor + 1) ? ' · BOSS' : ''}${newBiome ? ' · ' + esc(next.biome.name) : ''}</small></button></div></div>`;
+          <div class="btnrow"><button class="btn big ${G.atBottom() ? 'primary' : ''}" id="btn-extract">EXTRACT<small>to the surface · bank ${R.bag.length} items · ${fmt(R.gold)} gold</small></button>${G.atBottom() ? '' : `<button class="btn big primary" id="btn-descend">GO DEEPER<small>Floor ${R.floor + 1}${G.isBossFloor(R.floor + 1) ? ' · BOSS' : ''}${newBiome ? ' · ' + esc(next.biome.name) : ''}</small></button>`}</div>${G.atBottom() ? '<div class="tiny muted center mt">The dungeon ends here. Deeper dungeons wait in later zones.</div>' : ''}</div>`;
       } else html += `<div class="row" style="padding:0 10px"><button class="btn small ghost" id="btn-abandon">Abandon run</button><span class="grow"></span><span class="tiny muted">${R.phase === 'travel' ? 'Advancing…' : 'Fighting'}</span></div>`;
     } else if (Wd) {
       const m = Wd.map; const theme = D.ZONE_THEMES.find((t) => t.id === m.theme);
@@ -86,7 +86,7 @@
       const aq = G.activeQuest(); const ql = $('#quest-line'); ql.classList.remove('hidden');
       ql.innerHTML = aq ? `<b>${esc(aq.name)}</b>${aq.target ? ` <span class="q-prog">${aq.progress || 0}/${aq.target}</span>` : ''}<span class="q-desc"> — ${esc(aq.desc)}</span>` : `<b>${esc(m.title)} is done.</b><span class="q-desc"> — march on when you are ready.</span>`;
       html += `<div class="panel">${partyCards(Wd.party)}${Wd.phase === 'combat' && Wd.enc ? enemyRows(Wd.enc.enemies) : ''}
-        <div class="row between mt small"><span>Charted <b>${Math.round(G.exploredPct() * 100)}%</b> · Camps <b>${m.pois.filter((p) => p.type === 'camp' && p.done).length}/${m.pois.filter((p) => p.type === 'camp').length}</b></span><span class="muted">${Wd.potions > 0 ? '⚗ ' + Wd.potions : ''}</span></div></div>`;
+        <div class="row between mt small"><span>Charted <b>${Math.round(G.exploredPct() * 100)}%</b> · Packs <b>${m.pois.filter((p) => p.type === 'pack' && p.done).length}/${m.pois.filter((p) => p.type === 'pack').length}</b></span><span class="muted">${Wd.potions > 0 ? '⚗ ' + Wd.potions : ''}</span></div></div>`;
       // orders
       const dungeons = G.foundDungeons();
       html += `<div class="panel"><h3>Orders <small>${Wd.order ? 'in effect' : 'the company explores on its own'}</small></h3>`;
@@ -96,7 +96,7 @@
           const ws = G.waystones().filter((f) => f >= d.baseFloor); if (!ws.includes(d.baseFloor)) ws.unshift(d.baseFloor);
           if (!descendFloor[d.id] || !ws.includes(descendFloor[d.id])) descendFloor[d.id] = ws[ws.length - 1];
           const cleared = (Wd.cleared || {})[d.id] >= d.baseFloor;
-          html += `<div class="mt"><div class="row between"><b class="c3">${esc(d.name)}</b><span class="tiny muted">floor ${d.baseFloor}+ ${cleared ? '· cleared' : ''}</span></div>
+          html += `<div class="mt"><div class="row between"><b class="c3">${esc(d.name)}</b><span class="tiny muted">${d.floors ? d.floors + (d.floors === 1 ? ' floor' : ' floors') : 'endless'} · from floor ${d.baseFloor}${cleared ? ' · cleared' : ''}</span></div>
             ${ws.length > 1 ? `<div class="chips mt">${ws.map((f) => `<button class="chip ${descendFloor[d.id] === f ? 'active' : ''}" data-ws="${d.id}:${f}">Floor ${f}</button>`).join('')}</div>` : ''}
             <button class="btn primary big mt ${Wd.order && Wd.order.poi === d.id ? '' : 'pulse'}" data-descend="${d.id}" ${Wd.order && Wd.order.poi === d.id ? 'disabled' : ''}>DESCEND · ${esc(d.name).toUpperCase()}<small style="display:block;font-size:11px;letter-spacing:0;font-family:var(--sans);font-weight:400">the company walks to the entrance and goes down at floor ${descendFloor[d.id]}</small></button></div>`;
         }
