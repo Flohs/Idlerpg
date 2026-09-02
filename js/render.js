@@ -479,6 +479,7 @@
       const re = ent(p.uid, lead.x, lead.y, 'hero'); re.cls = h.cls; re.alive = p.alive;
       if (!re.init) { re.x = lead.x - i * 0.7; re.y = lead.y + i * 0.4; re.init = true; }
       if (Wd.phase === 'combat') return;
+      if (i === 0 && Math.hypot(lead.x - re.x, lead.y - re.y) > 6) { re.x = lead.x; re.y = lead.y; cam.init = false; trail.length = 0; }
       if (i === 0) { re.moving = steer(re, lead.x, lead.y, dt, 5 * speed, null); if (re.moving && (trail.length === 0 || Math.hypot(trail[0].x - re.x, trail[0].y - re.y) > 0.25)) { trail.unshift({ x: re.x, y: re.y }); if (trail.length > 40) trail.pop(); } }
       else { const t = trail[Math.min(trail.length - 1, i * 4)] || { x: lead.x - i * 0.7, y: lead.y + i * 0.4 }; re.moving = steer(re, t.x, t.y, dt, 5 * speed, null); }
     });
