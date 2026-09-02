@@ -45,9 +45,9 @@
       heroes: [], party: [], stash: [],
       buildings: { tavern: 1, blacksmith: 0, market: 0, shrine: 0, alchemist: 0, vault: 0, mine: 0, library: 0, guild: 0 },
       unlocked: {}, maxFloor: 0, ascensions: 0, perks: {}, relics: [],
-      settings: { autoDescend: true, autoExtractHp: 0.35, autoSell: 'none', autoSalvage: false, autoEquip: true, speed: 1, stopAtFloor: 0 },
-      stats: { kills: 0, runs: 0, wipes: 0, extractions: 0, goldEarned: 0, itemsFound: 0, bossKills: 0, deepest: 0, playTicks: 0 },
-      run: null, log: [], started: false, uid: 1, mineStock: { scrap: 0, gold: 0 },
+      settings: { autoDescend: true, autoExtractHp: 0.35, autoSell: 'none', autoSalvage: false, autoEquip: true, autoRestart: true, speed: 1, stopAtFloor: 0 },
+      stats: { kills: 0, runs: 0, wipes: 0, extractions: 0, goldEarned: 0, itemsFound: 0, bossKills: 0, deepest: 0, playTicks: 0, floorsCleared: 0 },
+      run: null, log: [], started: false, uid: 1, mineStock: { scrap: 0, gold: 0 }, ui: {}, wipeStreak: 0, restT: 0,
     };
   }
 
@@ -205,7 +205,7 @@
   }
   function sellPrice(it) { return Math.floor((6 + it.ilvl * 3.2 * Math.pow(1.03, it.ilvl)) * D.RARITIES[it.rarity].sell * (1 + S.buildings.market * 0.12) * (1 + it.up * 0.1)); }
   function salvageYield(it) {
-    const y = { scrap: Math.max(1, Math.round(1 + it.ilvl / 4)) };
+    const y = { scrap: Math.max(1, Math.round(2 + it.ilvl / 3)) };
     if (['head', 'chest', 'hands', 'feet'].includes(it.slot)) y.leather = Math.max(1, Math.round(it.ilvl / 6));
     if (it.rarity >= 2) y.essence = it.rarity - 1;
     if (it.up) y.scrap += it.up * 2;
@@ -344,11 +344,13 @@
   function isBossFloor(f) { return f % D.BOSS_EVERY === 0; }
   function difficultyMult() { return 1 + S.ascensions * 0.3; }
 
-  function startRun(startFloor) {
+  function startRun(startFloor, auto) {
     if (S.run) return 'A run is already in progress.';
     if (S.party.length === 0) return 'Pick a party first.';
     startFloor = startFloor || 1;
     if (!waystones().includes(startFloor)) return 'No waystone there.';
+    if (!auto) S.wipeStreak = 0;
+    S.ui.startFloor = startFloor;
     startFloor += (S.perks.legacy_depth || 0) * D.ASCENSION_PERKS.find((p) => p.id === 'legacy_depth').val;
     const party = S.party.map((uid) => { const h = S.heroes.find((x) => x.uid === uid); const st = heroStats(h); return { uid, hp: st.hp, maxhp: st.hp, shield: 0, ap: Math.random() * 50, cds: {}, buffs: [], alive: true, taunt: 0, stun: 0, dots: [] }; });
     S.run = { floor: startFloor, startFloor, room: 0, phase: 'travel', travelT: 0, party, enemies: [], bag: [], gold: 0, xp: 0, kills: 0, potions: S.buildings.alchemist, tick: 0, floorsCleared: 0, waitT: 0, bossFloorsCleared: 0 };
@@ -440,7 +442,8 @@
     const alive = R.party.filter((p) => p.alive);
     const goldBonus = 1 + Math.max(...alive.map((p) => heroStats(heroOf(p)).gold), 0) / 100 + S.ascensions * 0.3;
     const lootBonus = Math.max(...alive.map((p) => heroStats(heroOf(p)).loot), 0);
-    const g = Math.floor(C.gold(f) * (e.boss ? 8 : 1) * goldBonus * rnd(0.8, 1.2));
+    const deep = f >= 100 ? 2 : 1; // "Ever Deeper": loot scaling doubles past floor 100
+    const g = Math.floor(C.gold(f) * (e.boss ? 8 : 1) * goldBonus * rnd(0.8, 1.2) * deep);
     R.gold += g;
     const xp = C.xp(f) * (e.boss ? 6 : 1);
     for (const p of R.party) giveXp(heroOf(p), p.alive ? xp : xp * 0.5);
@@ -448,7 +451,7 @@
     // loot
     const dropChance = (e.boss ? 1 : 0.22 + f * 0.002) * (1 + lootBonus / 100);
     if (chance(dropChance)) {
-      const it = genItem(f + (e.boss ? 3 : 0), { luck: lootBonus + f * 0.5, minRarity: e.boss ? 2 : null });
+      const it = genItem(f + (e.boss ? 3 : 0) + (deep > 1 ? 5 : 0), { luck: (lootBonus + f * 0.5) * deep, minRarity: e.boss ? 2 : null });
       R.bag.push(it); S.stats.itemsFound++;
       emit('loot', { item: it, id: e.id });
       if (it.rarity >= 3) log(`Found ${it.name}!`, 'loot');
@@ -465,7 +468,8 @@
   function partyWipe() {
     const R = S.run;
     R.phase = 'dead';
-    S.stats.wipes++;
+    S.stats.wipes++; S.wipeStreak = (S.wipeStreak || 0) + 1;
+    if (S.wipeStreak === 3 && guildLevel() >= 6) log('Three wipes in a row. The Guild halts automatic runs until you send the company out yourself.', 'warn');
     const keep = S.buildings.shrine * 0.08;
     const kept = R.bag.filter(() => chance(keep));
     const goldKept = Math.floor(R.gold * 0.4);
@@ -480,7 +484,7 @@
   function extract() {
     const R = S.run; if (!R) return 'No run.';
     if (R.phase !== 'floorclear' && R.phase !== 'travel') return 'Can only extract after clearing a floor.';
-    S.stats.extractions++;
+    S.stats.extractions++; S.wipeStreak = 0;
     let sold = 0, salvaged = 0, kept = 0;
     for (const it of R.bag) {
       const rid = D.RARITIES[it.rarity].id;
@@ -610,7 +614,7 @@
 
   function floorCleared() {
     const R = S.run;
-    R.floorsCleared++;
+    R.floorsCleared++; S.stats.floorsCleared = (S.stats.floorsCleared || 0) + 1;
     if (isBossFloor(R.floor)) R.bossFloorsCleared++;
     if (R.floor > S.maxFloor) { S.maxFloor = R.floor; S.stats.deepest = R.floor; checkMilestones(); }
     // floor chest
@@ -632,7 +636,20 @@
 
   // main simulation tick (100ms at 1x)
   function tick() {
-    const R = S.run; if (!R) return;
+    const R = S.run;
+    if (!R) {
+      // Guild 6: the company sets out again on its own
+      if (guildLevel() >= 6 && S.settings.autoRestart && S.settings.autoDescend && (S.wipeStreak || 0) < 3 && S.party.length) {
+        S.restT = (S.restT || 0) + 1;
+        if (S.restT >= 100) {
+          S.restT = 0;
+          if (S.settings.autoEquip) autoEquipAll();
+          const ws = waystones(); const f = ws.includes(S.ui && S.ui.startFloor) ? S.ui.startFloor : ws[ws.length - 1];
+          if (!startRun(f, true)) log('On Guild orders, the company sets out again.', 'run');
+        }
+      }
+      return;
+    }
     R.tick++; S.stats.playTicks++;
     if (R.phase === 'travel') {
       R.travelT++;
@@ -665,7 +682,8 @@
         const stop = S.settings.stopAtFloor && R.floor >= S.settings.stopAtFloor;
         const lowHp = guildLevel() >= 2 && avg < S.settings.autoExtractHp;
         const someoneDead = alive.length < R.party.length && guildLevel() >= 2;
-        if (stop || lowHp || someoneDead) extract(); else descend();
+        const bossAhead = guildLevel() >= 2 && isBossFloor(R.floor + 1) && avg < Math.min(0.75, S.settings.autoExtractHp + 0.3);
+        if (stop || lowHp || someoneDead || bossAhead) extract(); else descend();
       }
     }
   }
@@ -718,17 +736,20 @@
     const now = Date.now(); const dt = Math.min(now - (S.lastSeen || now), 12 * 3600 * 1000);
     if (dt < 30000) return null;
     const hours = dt / 3600000;
-    const rep = { hours, mineGold: 0, mineScrap: 0, floors: 0, ticks: 0, ended: null };
+    const rep = { hours, mineGold: 0, mineScrap: 0, floors: 0, ticks: 0, ended: [], goldBefore: S.gold, itemsBefore: S.stats.itemsFound };
     if (S.buildings.mine) { rep.mineGold = Math.floor(S.buildings.mine * 25 * hours); rep.mineScrap = Math.floor(S.buildings.mine * 6 * hours); mineTick(hours); }
-    if (S.run && guildLevel() >= 6 && S.settings.autoDescend) {
+    if (guildLevel() >= 6 && S.settings.autoDescend && (S.run || S.settings.autoRestart)) {
       const maxTicks = Math.min(Math.floor(dt / D.TICK_MS), 4 * 36000);
-      const startFloor = S.run.floor; let ended = null;
-      const h = (s) => { ended = s; };
+      const before = S.stats.floorsCleared || 0;
+      const h = (s) => { rep.ended.push(s); };
       on('runend', h);
-      for (let i = 0; i < maxTicks && S.run; i++) tick();
+      const savedListeners = {}; for (const k in listeners) if (k !== 'runend') { savedListeners[k] = listeners[k]; listeners[k] = []; } // mute UI during bulk sim
+      for (let i = 0; i < maxTicks; i++) tick();
+      for (const k in savedListeners) listeners[k] = savedListeners[k];
       listeners.runend = listeners.runend.filter((x) => x !== h);
-      rep.ticks = maxTicks; rep.floors = (S.run ? S.run.floor : (ended ? ended.floor : startFloor)) - startFloor; rep.ended = ended;
+      rep.ticks = maxTicks; rep.floors = (S.stats.floorsCleared || 0) - before;
     }
+    rep.goldGained = S.gold - rep.goldBefore; rep.itemsGained = S.stats.itemsFound - rep.itemsBefore;
     S.lastSeen = now;
     return rep;
   }

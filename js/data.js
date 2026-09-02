@@ -288,7 +288,7 @@
       effect: (l) => `XP +${l * 10}% · Skill power +${l * 5}%` },
     guild: { name: 'Adventurers\' Guild', icon: '🛡', base: 300, growth: 2.2, max: 6, unlock: 'guild',
       desc: 'Automation. Let them delve while you sleep.',
-      effect: (l) => ['Auto-descend', 'Auto-extract on low HP', 'Auto-sell commons', 'Auto-salvage', 'Auto-equip', 'Offline delving'].slice(0, l).join(' · ') || 'Nothing yet' },
+      effect: (l) => ['Auto-descend', 'Auto-extract on low HP', 'Auto-sell', 'Auto-salvage', 'Auto-equip', 'Auto-restart & offline delving'].slice(0, l).join(' · ') || 'Nothing yet' },
   };
 
   // ---------- Milestones (unlock new mechanics as the player pushes deeper) ----------

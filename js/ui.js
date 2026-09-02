@@ -19,7 +19,8 @@
   // ---------- toasts / modals ----------
   function toast(html, kind, ms) {
     const el = document.createElement('div'); el.className = 'toast ' + (kind || ''); el.innerHTML = html;
-    $('#toasts').appendChild(el); setTimeout(() => { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, ms || 2600);
+    const root = $('#toasts'); while (root.children.length >= 3) root.firstChild.remove();
+    root.appendChild(el); setTimeout(() => { el.style.transition = 'opacity 0.4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, ms || 2600);
   }
   function modal(html, opts) {
     opts = opts || {};
@@ -275,7 +276,8 @@
         <div class="toggle"><span>Auto-sell on extraction ${gl < 3 ? '<span class="tiny muted">(Guild 3)</span>' : ''}</span><select data-sel="autoSell" ${gl < 3 ? 'disabled' : ''}><option value="none" ${st.autoSell === 'none' ? 'selected' : ''}>nothing</option><option value="common" ${st.autoSell === 'common' ? 'selected' : ''}>commons</option><option value="uncommon" ${st.autoSell === 'uncommon' ? 'selected' : ''}>uncommon &amp; below</option><option value="rare" ${st.autoSell === 'rare' ? 'selected' : ''}>rare &amp; below</option></select></div>
         <div class="toggle"><span>Salvage instead of selling ${gl < 4 ? '<span class="tiny muted">(Guild 4)</span>' : ''}</span><div class="sw ${st.autoSalvage ? 'on' : ''}" data-set="autoSalvage"></div></div>
         <div class="toggle"><span>Auto-equip best gear after extraction ${gl < 5 ? '<span class="tiny muted">(Guild 5)</span>' : ''}</span><div class="sw ${st.autoEquip ? 'on' : ''}" data-set="autoEquip"></div></div>
-        <div class="tiny muted mt">Guild 6: the company keeps delving while the game is closed (up to 4 hours).</div></div>`;
+        <div class="toggle"><span>Set out again after each run ${gl < 6 ? '<span class="tiny muted">(Guild 6)</span>' : ''}</span><div class="sw ${st.autoRestart ? 'on' : ''}" data-set="autoRestart"></div></div>
+        <div class="tiny muted mt">Guild 6: the company keeps delving while the game is closed (up to 4 hours). Three wipes in a row halt automatic runs until you send them out yourself.</div></div>`;
     }
     // ascension
     if (S.unlocked.ascension || S.ascensions > 0) {
@@ -349,7 +351,13 @@
     const h = Math.floor(rep.hours), mnt = Math.round((rep.hours - h) * 60);
     const rows = [['Away for', `${h}h ${mnt}m`]];
     if (rep.mineGold || rep.mineScrap) rows.push(['Mine produced', `${fmt(rep.mineGold)} gold, ${fmt(rep.mineScrap)} scrap`]);
-    if (rep.ticks) { rows.push(['Floors delved', rep.floors]); if (rep.ended) rows.push(['Run ended', rep.ended.type === 'wipe' ? 'wiped on floor ' + rep.ended.floor : 'extracted from floor ' + rep.ended.floor]); }
+    if (rep.ticks) {
+      rows.push(['Floors cleared', rep.floors]);
+      if (rep.goldGained > 0) rows.push(['Gold banked', fmt(rep.goldGained)]);
+      if (rep.itemsGained > 0) rows.push(['Items found', rep.itemsGained]);
+      if (rep.ended.length) rows.push(['Runs', rep.ended.slice(0, 4).map((e) => (e.type === 'wipe' ? 'wiped on ' + e.floor : e.type === 'extract' ? 'extracted from ' + e.floor : 'abandoned')).join(', ') + (rep.ended.length > 4 ? ', …' : '')]);
+      if (S.run) rows.push(['Now', `on floor ${S.run.floor}`]);
+    }
     if (rows.length === 1 && !S.run) return;
     if (rows.length === 1 && S.run) rows.push(['The company', 'waited for orders (Guild 6 lets them delve while you are away)']);
     modal(`<div class="big-title good">WHILE YOU WERE AWAY</div>${rows.map(([k, v]) => `<div class="summary-stat"><span class="muted">${k}</span><b>${v}</b></div>`).join('')}<div class="btnrow"><button class="btn primary" data-close>Continue</button></div>`);
