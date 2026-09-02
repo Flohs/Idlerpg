@@ -408,7 +408,7 @@
     let camT;
     if (R.phase === 'combat') { const alive = R.enemies.filter((e) => e.alive && ents[e.id]); const hs = R.party.filter((p) => ents[p.uid]); const hx = hs.reduce((a, p) => a + ents[p.uid].x, 0) / Math.max(1, hs.length), hy = hs.reduce((a, p) => a + ents[p.uid].y, 0) / Math.max(1, hs.length); const ex = alive.length ? alive.reduce((a, e) => a + ents[e.id].x, 0) / alive.length : hx, ey = alive.length ? alive.reduce((a, e) => a + ents[e.id].y, 0) / alive.length : hy; camT = { x: (hx + ex) / 2, y: (hy + ey) / 2 }; }
     else if (leader) camT = { x: leader.x + 0.6, y: leader.y - 0.2 }; else camT = { x: map.start.x, y: map.start.y };
-    if (!cam.init) { cam.x = camT.x; cam.y = camT.y; cam.init = true; } else { const k = Math.min(1, dt * 3); cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; }
+    if (!cam.init) { cam.x = camT.x; cam.y = camT.y; cam.init = true; } else { const k = Math.min(1, dt * 3 * Math.max(1, speed)); cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; }
     // ---- background ----
     ctx.fillStyle = '#070605'; ctx.fillRect(0, 0, W, H);
     const bgim = img(biome.bg);
@@ -498,7 +498,7 @@
     const leader = ents[Wd.party[0] && Wd.party[0].uid];
     let camT = leader ? { x: leader.x, y: leader.y } : lead;
     if (E) { const alive = E.enemies.filter((e) => e.alive && ents[e.id]); if (alive.length && leader) { const ex = alive.reduce((a, e) => a + ents[e.id].x, 0) / alive.length, ey = alive.reduce((a, e) => a + ents[e.id].y, 0) / alive.length; camT = { x: (leader.x + ex) / 2, y: (leader.y + ey) / 2 }; } }
-    if (!cam.init) { cam.x = camT.x; cam.y = camT.y; cam.init = true; } else { const k = Math.min(1, dt * 3); cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; }
+    if (!cam.init) { cam.x = camT.x; cam.y = camT.y; cam.init = true; } else { const k = Math.min(1, dt * 3 * Math.max(1, speed)); cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; }
     // ---- terrain: continuous textures in world space (no visible tile grid) ----
     ctx.fillStyle = '#050403'; ctx.fillRect(0, 0, W, H);
     const inView = (p, pad) => p.x > -TW - pad && p.x < W + TW + pad && p.y > -80 - pad && p.y < H + TH + pad;
