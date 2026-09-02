@@ -66,6 +66,33 @@
     tileCache[ck] = cv; return cv;
   }
   function diamond(px, py, w, h) { ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + w / 2, py + h / 2); ctx.lineTo(px, py + h); ctx.lineTo(px - w / 2, py + h / 2); ctx.closePath(); }
+  // ---- continuous ground: patterns filled in world space so textures run seamlessly across tiles ----
+  const patCache = {};
+  function pattern(key, tilesPer, shift) {
+    const ck = key + ':' + tilesPer; let p = patCache[ck];
+    if (!p) { const im = img(key); if (!im) return null; p = ctx.createPattern(im, 'repeat'); if (!p) return null; p.__w = im.naturalWidth; p.__h = im.naturalHeight; patCache[ck] = p; }
+    try { p.setTransform(new DOMMatrix([tilesPer / p.__w, 0, 0, tilesPer / p.__h, shift || 0, 0])); } catch (e) { /* old browsers keep the unscaled pattern */ }
+    return p;
+  }
+  function isoTransform() { const c = iso(cam.x, cam.y); ctx.setTransform(DPR * TW / 2, DPR * TH / 2, -DPR * TW / 2, DPR * TH / 2, DPR * (W / 2 - c.sx), DPR * (H * 0.56 - c.sy)); }
+  function resetTransform() { ctx.setTransform(DPR, 0, 0, DPR, 0, 0); }
+  function worldBounds() {
+    const c = iso(cam.x, cam.y); const inv = (sx, sy) => { const rx = sx - (W / 2 - c.sx), ry = sy - (H * 0.56 - c.sy); return { x: (rx / (TW / 2) + ry / (TH / 2)) / 2, y: (ry / (TH / 2) - rx / (TW / 2)) / 2 }; };
+    const pts = [inv(0, -90), inv(W, -90), inv(0, H + 40), inv(W, H + 40)];
+    return { x0: Math.floor(Math.min(...pts.map((q) => q.x))) - 1, x1: Math.ceil(Math.max(...pts.map((q) => q.x))) + 1, y0: Math.floor(Math.min(...pts.map((q) => q.y))) - 1, y1: Math.ceil(Math.max(...pts.map((q) => q.y))) + 1 };
+  }
+  // soft fog of war: a quarter-resolution mask upscaled with smoothing gives blurred edges for free
+  let fogCv = null, fogCtx = null; const FOG_SCALE = 0.25;
+  function drawFogLayer(revealed) {
+    const fw = Math.ceil(W * FOG_SCALE), fh = Math.ceil(H * FOG_SCALE);
+    if (!fogCv || fogCv.width !== fw || fogCv.height !== fh) { fogCv = document.createElement('canvas'); fogCv.width = fw; fogCv.height = fh; fogCtx = fogCv.getContext('2d'); }
+    const g = fogCtx; g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.fillStyle = '#030302'; g.fillRect(0, 0, fw, fh);
+    const c = iso(cam.x, cam.y); const s = FOG_SCALE;
+    g.setTransform(s * TW / 2, s * TH / 2, -s * TW / 2, s * TH / 2, s * (W / 2 - c.sx), s * (H * 0.56 - c.sy));
+    g.globalCompositeOperation = 'destination-out'; g.fillStyle = '#000'; g.fill(revealed);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    resetTransform(); ctx.imageSmoothingEnabled = true; ctx.drawImage(fogCv, 0, 0, fw, fh, 0, 0, W, H);
+  }
   function wallFace(im, x0, y0, dx, dy, hgt, slice, shade) {
     const w = 64, h = 256;
     ctx.save();
@@ -390,17 +417,15 @@
     const visibleOwner = (o) => { if (o < 0) return false; if (o >= 100) return o - 100 <= R.room + (inTravel ? 1 : 0); const vo = map.visitOrder[o]; if (vo === undefined) return false; return vo <= R.room || (vo === R.room + 1 && R.doorOpen); };
     const tiles = map.tiles, mw = map.w, mh = map.h;
     const inView = (p, pad) => p.x > -TW - pad && p.x < W + TW + pad && p.y > -WALLH - TH - pad && p.y < H + TH + pad;
-    const ft = groundTile('tile_' + biome.id + '_floor', false), ftd = groundTile('tile_' + biome.id + '_floor', true);
-    const drawables = [];
+    const ftd = groundTile('tile_' + biome.id + '_floor', true);
+    const drawables = []; const floorP = new Path2D(), hiddenP = new Path2D();
     for (let ty = 0; ty < mh; ty++) for (let tx = 0; tx < mw; tx++) {
       const v = tiles[ty * mw + tx]; if (v === DG.VOID) continue;
       const p = toScreen(tx, ty); if (!inView(p, 0)) continue;
       const o = map.owner[ty * mw + tx]; const vis = visibleOwner(o);
       if (v === DG.FLOOR || v === DG.DOOR) {
-        const tile = ((tx * 7 + ty * 13) % 5 === 0) ? ftd : ft;
-        if (tile) ctx.drawImage(tile, p.x - TW / 2, p.y, TW, TH); else { diamond(p.x, p.y, TW, TH); ctx.fillStyle = biome.tint; ctx.fill(); }
-        if (!vis) { diamond(p.x, p.y, TW, TH); ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fill(); }
-        if (tx === map.exit.x && ty === map.exit.y) drawStairs(p);
+        floorP.rect(tx, ty, 1, 1); if (!vis) hiddenP.rect(tx, ty, 1, 1);
+        if (tx === map.exit.x && ty === map.exit.y) drawables.push({ d: tx + ty + 0.5, f: () => drawStairs(p) });
         if (v === DG.DOOR) { const dir = doorDir(map, tx, ty); drawables.push({ d: tx + ty + 1, f: () => drawDoor(tx, ty, dir, doorAnim[tx + ',' + ty] || 0, !vis) }); }
       } else if (v === DG.WALL) {
         const behind = (x2, y2) => { const t2 = x2 < 0 || y2 < 0 || x2 >= mw || y2 >= mh ? DG.VOID : tiles[y2 * mw + x2]; return t2 === DG.FLOOR || t2 === DG.DOOR; };
@@ -410,6 +435,7 @@
     }
     for (const pr of map.props) { const o = map.owner[pr.y * mw + pr.x]; if (!visibleOwner(o)) continue; const p = toScreen(pr.x, pr.y); if (!inView(p, 0)) continue; drawables.push({ d: pr.x + pr.y + 1, f: () => drawProp(p, pr.k, biome.accent) }); }
     for (const t of map.torches) { const o = map.owner[(t.y + 1) * mw + t.x]; if (!visibleOwner(o)) continue; const p = toScreen(t.x, t.y); if (!inView(p, 40)) continue; drawables.push({ d: t.x + t.y + 1.01, f: () => drawTorch(p) }); }
+    isoTransform(); const fp = pattern('tile_' + biome.id + '_floor', 3); ctx.fillStyle = fp || biome.tint; ctx.fill(floorP); ctx.fillStyle = 'rgba(0,0,0,0.84)'; ctx.fill(hiddenP); resetTransform();
     if (R.phase === 'floorclear') { const r = rooms[rooms.length - 1]; const p = toScreen(r.cx, r.cy); drawables.push({ d: r.cx + r.cy + 1, f: () => { drawSpriteImg('prop_chest', { x: p.x, y: p.y + TH / 2 + 4 }, 26) || (() => { ctx.fillStyle = '#4a3418'; ctx.fillRect(p.x - 10, p.y - 8, 20, 12); })(); } }); }
     pushEntities(S, R, list, drawables, R.phase === 'combat' || R.doorOpen);
     drawables.sort((a, b) => a.d - b.d);
@@ -473,26 +499,43 @@
     let camT = leader ? { x: leader.x, y: leader.y } : lead;
     if (E) { const alive = E.enemies.filter((e) => e.alive && ents[e.id]); if (alive.length && leader) { const ex = alive.reduce((a, e) => a + ents[e.id].x, 0) / alive.length, ey = alive.reduce((a, e) => a + ents[e.id].y, 0) / alive.length; camT = { x: (leader.x + ex) / 2, y: (leader.y + ey) / 2 }; } }
     if (!cam.init) { cam.x = camT.x; cam.y = camT.y; cam.init = true; } else { const k = Math.min(1, dt * 3); cam.x += (camT.x - cam.x) * k; cam.y += (camT.y - cam.y) * k; }
-    // ---- terrain ----
+    // ---- terrain: continuous textures in world space (no visible tile grid) ----
     ctx.fillStyle = '#050403'; ctx.fillRect(0, 0, W, H);
-    const gt = groundTile(theme.ground, false), gtd = groundTile(theme.ground, true), pt = groundTile(theme.path, false), wt = groundTile('tile_water', false), rt = groundTile('tile_rock', true);
     const inView = (p, pad) => p.x > -TW - pad && p.x < W + TW + pad && p.y > -80 - pad && p.y < H + TH + pad;
     const drawables = [];
     const lx = leader ? leader.x : lead.x, ly = leader ? leader.y : lead.y;
     const tiles = map.tiles, mw = map.w, mh = map.h;
-    for (let ty = 0; ty < mh; ty++) for (let tx = 0; tx < mw; tx++) {
+    const wb = worldBounds();
+    const X0 = Math.max(0, wb.x0), X1 = Math.min(mw - 1, wb.x1), Y0 = Math.max(0, wb.y0), Y1 = Math.min(mh - 1, wb.y1);
+    const groundP = new Path2D(), pathP = new Path2D(), pathSoft = new Path2D(), waterP = new Path2D(), shoreP = new Path2D(), revealed = new Path2D(), rockP = new Path2D();
+    for (let ty = Y0; ty <= Y1; ty++) for (let tx = X0; tx <= X1; tx++) {
       const i = ty * mw + tx; if (!Wd.explored[i]) continue;
-      const p = toScreen(tx, ty); if (!inView(p, 0)) continue;
+      revealed.rect(tx - 0.3, ty - 0.3, 1.6, 1.6);
       const v = tiles[i];
-      const dist = Math.hypot(tx + 0.5 - lx, ty + 0.5 - ly); const dim = dist > 6.5 ? Math.min(0.55, (dist - 6.5) * 0.12) : 0;
-      if (v === Wr.WATER) { diamond(p.x, p.y, TW, TH); ctx.fillStyle = '#0a1418'; ctx.fill(); if (wt) { ctx.globalAlpha = 0.85; ctx.drawImage(wt, p.x - TW / 2, p.y, TW, TH); ctx.globalAlpha = 1; } const sh = Math.sin(torchPhase * 2 + tx * 1.3 + ty * 0.7); ctx.strokeStyle = 'rgba(140,180,200,' + (0.08 + sh * 0.06) + ')'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + TH / 2 + sh * 2); ctx.lineTo(p.x + 8, p.y + TH / 2 - 2 + sh * 2); ctx.stroke(); }
-      else {
-        const tile = v === Wr.PATH ? pt : ((tx * 7 + ty * 13) % 5 === 0 ? gtd : gt);
-        if (tile) ctx.drawImage(tile, p.x - TW / 2, p.y, TW, TH); else { diamond(p.x, p.y, TW, TH); ctx.fillStyle = theme.tint; ctx.fill(); }
-        if (v === Wr.ROCK) drawables.push({ d: tx + ty + 1, f: () => drawBlock(tx, ty, p, 'tile_rock', rt, ROCKH + ((tx * 3 + ty * 5) % 3) * 4, false, 'rgba(0,0,0,0.35)') });
-        else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { if (!drawSpriteImg(theme.tree, { x: p.x, y: p.y + TH / 2 + 4 }, 64 + ((tx * 7 + ty * 3) % 3) * 8, { dark: dim > 0.3 })) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + TH / 2 + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + TH / 2 + 4); ctx.closePath(); ctx.fill(); } } });
+      if (v === Wr.WATER) { waterP.rect(tx, ty, 1, 1); shoreP.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); }
+      else { groundP.rect(tx, ty, 1, 1); if (v === Wr.PATH) { pathP.rect(tx, ty, 1, 1); pathSoft.rect(tx - 0.3, ty - 0.3, 1.6, 1.6); } }
+      if (v === Wr.ROCK) {
+        rockP.rect(tx, ty, 1, 1);
+        const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const t2 = Wr.walkable(map, tx + dx, ty + dy); return t2; });
+        if (edge && (tx * 7 + ty * 11) % 5 !== 0) drawables.push({ d: tx + ty + 1, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); if (!drawSpriteImg('prop_rock', { x: p.x, y: p.y + 6 }, 26 + ((tx * 3 + ty * 5) % 3) * 8)) { ctx.fillStyle = '#2a2622'; ctx.beginPath(); ctx.ellipse(p.x, p.y, 16, 9, 0, 0, Math.PI * 2); ctx.fill(); } } });
       }
-      if (dim > 0) { diamond(p.x, p.y, TW, TH); ctx.fillStyle = 'rgba(0,0,0,' + dim + ')'; ctx.fill(); }
+      else if (v === Wr.TREE) drawables.push({ d: tx + ty + 1.2, f: () => { const p = toScreen(tx + 0.5, ty + 0.5); if (!drawSpriteImg(theme.tree, { x: p.x, y: p.y + 4 }, 58 + ((tx * 7 + ty * 3) % 3) * 8)) { ctx.fillStyle = '#1a2a12'; ctx.beginPath(); ctx.moveTo(p.x - 10, p.y + 4); ctx.lineTo(p.x, p.y - 30); ctx.lineTo(p.x + 10, p.y + 4); ctx.closePath(); ctx.fill(); } } });
+    }
+    isoTransform();
+    const gp = pattern(theme.ground, 5), pp = pattern(theme.path, 4), wp = pattern('tile_water', 4, (torchPhase * 0.12) % 4);
+    ctx.fillStyle = gp || theme.tint; ctx.fill(groundP);
+    const rp = pattern('tile_rock', 4); ctx.fillStyle = rp || '#2a2622'; ctx.fill(rockP); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(rockP);
+    if (pp) { ctx.globalAlpha = 0.45; ctx.fillStyle = pp; ctx.fill(pathSoft); ctx.globalAlpha = 0.95; ctx.fill(pathP); ctx.globalAlpha = 1; }
+    ctx.globalAlpha = 0.4; ctx.fillStyle = '#05090b'; ctx.fill(shoreP); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0a1418'; ctx.fill(waterP);
+    if (wp) { ctx.globalAlpha = 0.8; ctx.fillStyle = wp; ctx.fill(waterP); ctx.globalAlpha = 1; }
+    resetTransform();
+    // unify colours: theme tint plus large soft blotches of shade, like painted ground
+    ctx.fillStyle = theme.tint; ctx.globalAlpha = 0.22; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+    for (let k = 0; k < 9; k++) {
+      const bx = ((Wd.seed >>> (k * 3)) % 41 + k * 5) % mw, by = ((Wd.seed >>> (k * 2 + 1)) % 37 + k * 7) % mh; const p = toScreen(bx, by);
+      if (p.x < -220 || p.x > W + 220 || p.y < -220 || p.y > H + 220) continue;
+      const r = 100 + (k % 3) * 45; const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r); g.addColorStop(0, k % 4 === 0 ? 'rgba(255,230,180,0.07)' : 'rgba(0,0,0,0.24)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
     }
     // POIs (only once discovered)
     for (const po of map.pois) {
@@ -513,9 +556,10 @@
     for (let i = fx.length - 1; i >= 0; i--) { if (!drawFx(fx[i], dt)) fx.splice(i, 1); }
     // destination marker for orders
     if (Wd.order && Wd.dest) { const p = toScreen(Wd.dest.x + 0.5, Wd.dest.y + 0.5); const k = (torchPhase % 1); ctx.strokeStyle = 'rgba(232,180,90,' + (1 - k) + ')'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, 10 + k * 14, 5 + k * 7, 0, 0, Math.PI * 2); ctx.stroke(); }
+    drawFogLayer(revealed);
+    const lp = toScreen(lx, ly); const lg = ctx.createRadialGradient(lp.x, lp.y - 12, TW * 2.4, lp.x, lp.y - 12, TW * 8); lg.addColorStop(0, 'rgba(0,0,0,0)'); lg.addColorStop(1, 'rgba(0,0,0,0.5)'); ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = theme.fog; ctx.globalAlpha = 0.18; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
     if (Wd.phase === 'dead') { ctx.fillStyle = 'rgba(60,0,0,0.45)'; ctx.fillRect(0, 0, W, H); ctx.font = '700 ' + Math.round(H * 0.08) + 'px ' + serif(); ctx.textAlign = 'center'; ctx.fillStyle = '#d0473c'; ctx.fillText('THE COMPANY FALLS', W / 2, H * 0.4); }
-    ctx.fillStyle = theme.fog; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
-    vignette(theme.fog, 0);
   }
   function drawMinimap(Wd) {
     const map = Wd.map; const size = Math.min(104, W * 0.28); const sc = size / Math.max(map.w, map.h);

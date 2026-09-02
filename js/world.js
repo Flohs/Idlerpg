@@ -77,7 +77,7 @@
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const i = y * w + x; const v = n1[i] * 0.7 + n2[i] * 0.3;
       if (x < 2 || y < 2 || x >= w - 2 || y >= h - 2) { tiles[i] = ROCK; continue; }
-      if (v < 0.27) tiles[i] = WATER; else if (v > 0.74) tiles[i] = ROCK; else if (n3[i] > 0.66 && n2[i] > 0.4) tiles[i] = TREE;
+      if (v < 0.27) tiles[i] = WATER; else if (v > 0.74) tiles[i] = ROCK; else if (n3[i] > 0.735 && n2[i] > 0.45) tiles[i] = TREE;
     }
     // start: a ground tile in the top-left quadrant
     let start = null;
