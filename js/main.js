@@ -7,8 +7,10 @@
 
   R.start();
   R.bind();
+  window.AudioFX.bind();
   const loaded = G.load();
   UI.bind();
+  if (G.S) { window.AudioFX.setVolumes(G.S.settings.sfx, G.S.settings.music); window.AudioFX.music(G.S.run ? 'dungeon' : 'world'); }
   if (!loaded || !G.S.started) UI.intro();
   else {
     UI.setState(G.S);

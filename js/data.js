@@ -205,11 +205,11 @@
   D.SLOT_ICON = { weapon: 'item_weapon', head: 'item_head', chest: 'item_chest', hands: 'item_hands', feet: 'item_feet', ring: 'item_ring', amulet: 'item_amulet' };
   D.RARITIES = [
     { id: 'common', name: 'Common', color: '#9a9a9a', mult: 1.0, affixes: 0, weight: 100, sell: 1 },
-    { id: 'uncommon', name: 'Uncommon', color: '#6fbf5a', mult: 1.25, affixes: 1, weight: 45, sell: 2.5 },
-    { id: 'rare', name: 'Rare', color: '#4d8fe0', mult: 1.55, affixes: 2, weight: 16, sell: 6 },
-    { id: 'epic', name: 'Epic', color: '#b264e6', mult: 1.95, affixes: 3, weight: 5, sell: 15 },
-    { id: 'legendary', name: 'Legendary', color: '#e8973a', mult: 2.5, affixes: 4, weight: 1.2, sell: 40 },
-    { id: 'mythic', name: 'Mythic', color: '#e0403a', mult: 3.3, affixes: 5, weight: 0.2, sell: 120 },
+    { id: 'uncommon', name: 'Uncommon', color: '#6fbf5a', mult: 1.25, affixes: 1, weight: 7, sell: 2.5 },
+    { id: 'rare', name: 'Rare', color: '#4d8fe0', mult: 1.55, affixes: 2, weight: 1.2, sell: 6 },
+    { id: 'epic', name: 'Epic', color: '#b264e6', mult: 1.95, affixes: 3, weight: 0.25, sell: 15 },
+    { id: 'legendary', name: 'Legendary', color: '#e8973a', mult: 2.5, affixes: 4, weight: 0.05, sell: 40 },
+    { id: 'mythic', name: 'Mythic', color: '#e0403a', mult: 3.3, affixes: 5, weight: 0.008, sell: 120 },
   ];
   // base stat by slot (scaled by item level)
   D.SLOT_BASE = {
@@ -334,7 +334,7 @@
     { id: 'legacy_depth', name: 'Legacy of Depth', desc: 'Start runs 5 floors deeper per rank', max: 6, cost: (r) => 3 + r * 2, stat: 'startfloor', val: 5 },
   ];
 
-  D.ROOMS_PER_FLOOR = 4;      // encounters per floor (+1 boss room on boss floors)
+  D.ROOMS_PER_FLOOR = 3;      // main rooms per floor (+1 boss room on boss floors); alcoves add more
   D.TICK_MS = 100;            // sim tick
   D.ROUND_TICKS = 10;         // one combat round per second at 1x
 

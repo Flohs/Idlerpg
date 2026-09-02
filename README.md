@@ -4,6 +4,16 @@ A mobile-first idle dungeon-crawler roguelite for the browser. You assemble a co
 
 No build step. Open `index.html` from any static host (GitHub Pages works) — everything is vanilla HTML/CSS/JS and saves to `localStorage`.
 
+## How it plays
+
+The company leaves the village gate into an **auto-generated open zone** (Diablo-style): they chart the map on their own, break monster camps, loot chests, pray at shrines and hunt the zone's lair boss. Every zone hides one or more **dungeon entrances**; once found, tap **Descend** and the company walks back to the entrance (from wherever they are) and goes down. Slaying the lair boss opens the **road to the next zone**; tap **March** when you are ready, or let the Guild automate it. Zones cycle through four themes (Blighted Moors, Fungal Fens, Frozen Reach, Ashen Wastes) and get harder every time.
+
+Below ground each floor is a chain of big doored rooms with side alcoves (chest rooms). Monsters wait behind the doors; heroes pick their foes and close in, ranged classes keep their distance, flying monsters hover and dive, and sky-borne spells rain down. After every floor: extract or go deeper.
+
+Each class has a **Diablo II style skill tree**: three tiers, nine skills (actives and passives), prerequisites, 20 ranks and synergies. Heroes earn a point per level (and from quests); auto-spend is on by default, or manage points yourself and respec for gold.
+
+Loot follows Diablo II's rarity curve: nearly everything is plain white, an uncommon is rare, a rare is an event.
+
 ## Features
 
 - **Auto-crawling party** in an isometric, procedurally generated dungeon: doored rooms joined by corridors, Diablo-style. The company walks the corridors in formation, doors swing open to reveal what waits inside, and attacks, projectiles and spells are drawn on the canvas. Touch-only UI, no direct character control.
@@ -18,6 +28,18 @@ No build step. Open `index.html` from any static host (GitHub Pages works) — e
 ## Art
 
 All portraits, backdrops, sprites and tiles were generated with OpenArt (Nano Banana 2) in a gritty, painterly dark-fantasy style. `tools/process_images.py` converts portraits and backdrops to WebP; `tools/cutout.py` chroma-keys the green/magenta-screen sprites into transparent WebP and resizes the floor, wall and door tiles. Sprites are static; walking, lunges, projectiles and spell effects are done in `js/render.js`.
+
+## Audio
+
+The game plays sounds and music if the files exist; missing files are silently skipped. Put them here (mp3 or ogg, the game picks whichever the browser plays):
+
+```
+assets/audio/sfx/   hit, enemy_hit, crit, skill, heal, die, boss_die, hero_die, loot, chest,
+                    levelup, door, milestone, quest, floorclear
+assets/audio/music/ world, dungeon, boss
+```
+
+Volumes are in the settings gear.
 
 ## Balance simulation
 
