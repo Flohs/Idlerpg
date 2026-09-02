@@ -459,7 +459,7 @@
       const alive = R.enemies.filter((e) => e.alive && ents[e.id]); const allies = R.party.filter((p) => p.alive && ents[p.uid]);
       const centroid = (arr, key) => { if (!arr.length) return null; let x = 0, y = 0; for (const a of arr) { const e = ents[key ? a[key] : a.id]; x += e.x; y += e.y; } return { x: x / arr.length, y: y / arr.length }; };
       const lowest = allies.length ? allies.reduce((a, b) => (a.hp / a.maxhp < b.hp / b.maxhp ? a : b)) : null;
-      floats.push({ wx: src.x, wy: src.y, dx: 0, dy: -70, vy: -0.5, life: 1.2, text: s.name, color: '#ffe0a0', size: 11, bold: true });
+      if (floats.filter((f) => f.skill).length < 3) floats.push({ wx: src.x, wy: src.y, dx: 0, dy: -70, vy: -0.5, life: 1.2, text: s.name, color: '#ffe0a0', size: 11, bold: true, skill: true });
       switch (sk.type) {
         case 'dmg': { const t = alive[0]; if (!t) break; const ranged = HERO_RANGED[cls]; if (ranged) projectile(s.id, t.id, ranged, true); else { lungeTo(s.id, t.id); slashAt(t.id, color, true, 0.1); } break; }
         case 'aoe': { const c = centroid(alive); if (c) { addFx({ type: 'ring', p: c, color, radius: 2.2, dur: 0.55, fill: cls === 'pyromancer' || cls === 'paladin' }); alive.forEach((e, i) => setTimeout(() => burstAt({ x: ents[e.id].x, y: ents[e.id].y }, color, true), 120 + i * 60)); } src.lunge = 0.25; src.lvx = 0.3; src.lvy = 0; break; }
